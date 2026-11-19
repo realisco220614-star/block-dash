@@ -39,6 +39,7 @@
             "$uid": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 3" }
           },
           "finalLapAt": { ".validate": "newData.isNumber()" },
+          "bots": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 20" },
           "results": {
             "o": { "$i": { ".validate": "newData.isString() && newData.val().length < 64" } },
             "f": { "$i": { ".validate": "newData.isNumber()" } },
@@ -68,6 +69,23 @@
             "$other": { ".validate": false }
           }
         },
+        "bots": {
+          ".write": "auth != null && root.child('rooms').child($code).child('meta').child('host').val() === auth.uid",
+          "$bid": {
+            ".validate": "$bid.matches(/^bot[0-9]{1,2}$/) && newData.hasChildren(['n', 'c'])",
+            "n": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 6" },
+            "c": {
+              "$i": { ".validate": "$i.matches(/^[0-3]$/) && newData.isNumber() && newData.val() >= 0 && newData.val() < 8" }
+            },
+            "ab": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 4" },
+            "cheer": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 4" },
+            "s": {
+              "$i": { ".validate": "$i.matches(/^[0-8]$/) && newData.isNumber()" }
+            },
+            "fin": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 3600" },
+            "$other": { ".validate": false }
+          }
+        },
         "events": {
           ".write": "auth != null && root.child('rooms').child($code).child('meta').child('host').val() === auth.uid",
           "$eid": {
@@ -83,6 +101,7 @@
             "k": { ".validate": "newData.isNumber()" },
             "h": { ".validate": "newData.isNumber()" },
             "p": { ".validate": "newData.isNumber()" },
+            "b": { ".validate": "newData.isString() && newData.val().matches(/^bot[0-9]{1,2}$/)" },
             "$other": { ".validate": false }
           }
         }

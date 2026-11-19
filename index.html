@@ -162,6 +162,9 @@ body.portraitOk #rotate{display:none!important}
  .sw{width:30px;height:30px;border-radius:9px}.prow{gap:4px;margin:4px 0}.prow span{width:36px;font-size:15px}
  .seg button{font-size:13px;padding:4px 8px}.optrow{font-size:15px}
 }
+.botBtn{font-family:inherit;font-size:22px;width:40px;height:36px;border:none;border-radius:12px;background:#e9e4ff;color:#3a2a7a;box-shadow:0 3px 0 #b6a8ff;margin:0 6px;cursor:pointer}
+#botNum{font-size:22px;color:#3a2a7a;display:inline-block;min-width:26px}
+.chip.bot{background:#e3f6ff}
 .hidden{display:none!important}
 </style>
 </head>
@@ -237,6 +240,7 @@ body.portraitOk #rotate{display:none!important}
   <div class="optrow" style="margin-top:8px">경기 방식 <span class="seg" id="hModeSeg"></span><span id="hTeamOpts"><span class="seg" id="hCountSeg"></span><span class="seg" id="hPickSeg"></span></span></div>
   <div class="help small" id="hostHint" style="margin-top:0"></div>
   <div class="sub" id="hostCount" style="margin-top:10px">들어온 친구 0 / 20명</div>
+  <div class="optrow" id="botRow">🤖 컴퓨터 친구 <button class="botBtn" id="botMinus" aria-label="컴퓨터 친구 빼기">−</button><b id="botNum">0</b>명<button class="botBtn" id="botPlus" aria-label="컴퓨터 친구 더하기">＋</button><button class="link" id="botFill" style="margin:0 0 0 6px">20명까지 채우기</button></div>
   <div class="chips" id="hostList"></div>
   <button id="hostStart" class="big" disabled>▶ 시작</button>
   <div><button class="link" id="hostClose">방 닫기</button></div>
@@ -650,14 +654,14 @@ function daze(o,by,cx,cz){if(abImmune(o,by)||blocked(o))return false;o.stun=Math
   if(cx!=null){let dx=o.pos.x-cx,dz=o.pos.z-cz,d=Math.hypot(dx,dz);if(d>0.05){o.kx=dx/d*ABP.poundPush;o.kz=dz/d*ABP.poundPush;}}burst(v3(o.pos.x,1.6,o.pos.z),0xffd23f,6);if(o.isPlayer)toast('쿵! 어질~');return true;}
 function shock(r,R){ring(r.pos.x,r.pos.z,R,0xffd23f);burst(v3(r.pos.x,0.4,r.pos.z),0xb9a7ff,10);
   for(const o of racers){if(o===r||o.remote||Math.hypot(o.pos.x-r.pos.x,o.pos.z-r.pos.z)>R||Math.abs(o.y-r.y)>2)continue;if(daze(o,r,r.pos.x,r.pos.z)&&r.isPlayer)toast('쿵! '+o.name+' 멈칫!');}
-  if(mode==='net'&&r.isPlayer)sendEvent({t:'pd',x:r2(r.pos.x),z:r2(r.pos.z),h:R});}
+  if(mode==='net'&&!r.remote)sendEvent({t:'pd',x:r2(r.pos.x),z:r2(r.pos.z),h:R});}
 // --- 끈끈이 웅덩이 ---
 let traps=[];const honeyMat=new THREE.MeshLambertMaterial({color:0xffb52e,transparent:true,opacity:0.88});const honeyGeo=new THREE.CylinderGeometry(ABP.honeyR,ABP.honeyR,0.06,24);
 function spawnHoney(x,z,ownerUid,id){const g=new THREE.Group();const m=new THREE.Mesh(honeyGeo,honeyMat);m.position.y=0.05;g.add(m);
   for(let k=0;k<4;k++)box(0.36,0.2,0.36,0xffd77a,Math.cos(k*1.6)*1.4,0.12,Math.sin(k*1.6)*1.4,g);g.position.set(x,0,z);scene.add(g);traps.push({m:g,x,z,ownerUid,id,t:ABP.honeyT,hit:{}});}
 // --- 능력 쓰기 ---
 function useAbility(r){if(state!=='race'||raceTime<AB_START||r.abCd>0||r.down>0||r.stun>0||r.falling||r.finished)return false;
-  const A=ABIL[r.ab]||ABIL[0],fx=Math.sin(r.h),fz=Math.cos(r.h),net=mode==='net'&&r.isPlayer;
+  const A=ABIL[r.ab]||ABIL[0],fx=Math.sin(r.h),fz=Math.cos(r.h),net=mode==='net'&&!r.remote;
   if(A.k==='tackle'){if(!tackle(r))return false;}
   else if(A.k==='whirl'){r.abT=0.6;ring(r.pos.x,r.pos.z,ABP.whirlR,0x5ad1ff);
     for(const o of racers){if(o===r||o.remote||Math.hypot(o.pos.x-r.pos.x,o.pos.z-r.pos.z)>ABP.whirlR||Math.abs(o.y-r.y)>2)continue;if(pushOut(o,r.pos.x,r.pos.z,ABP.whirlP,r)&&r.isPlayer)toast('회오리! '+o.name+' 휘잉~');}
@@ -693,7 +697,7 @@ function respawn(r){let i=r.idx;if(r.lastSc>=0){i=bridges[r.lastSc].i0;r.lastSc=
 
 // ---------- racer update (내 캐릭터·AI) ----------
 const input={x:0,y:0};
-function updateRacer(r,dt){
+function updateRacer(r,dt){actor=r;
   r.hitCool=Math.max(0,r.hitCool-dt);r.hurdleCool=Math.max(0,r.hurdleCool-dt);r.wallCool=Math.max(0,r.wallCool-dt);r.bumpCool=Math.max(0,r.bumpCool-dt);r.boost=Math.max(0,r.boost-dt);r.shield=Math.max(0,r.shield-dt);r.invuln=Math.max(0,r.invuln-dt);r.giant=Math.max(0,r.giant-dt);r.inked=Math.max(0,r.inked-dt);r.soot=Math.max(0,r.soot-dt);
   if(r.rollT>0){r.rollT-=dt;if(r.isPlayer&&r.rollT<=0)updateItemUI();}
   r.abCd=Math.max(0,r.abCd-dt);r.abT=Math.max(0,r.abT-dt);r.slow=Math.max(0,r.slow-dt);if(r.pounding)r.abT=Math.max(r.abT,0.1);
@@ -734,6 +738,7 @@ function updateRacer(r,dt){
   let maxs=MAXS;
   if(r.ai&&mode==='solo'&&player&&!r.isPlayer){const d=prog(r)-prog(player);maxs*=r.ai.spd*(d>80?0.86:d>30?0.94:d<-80?1.1:d<-30?1.04:1);}
   else if(r.finished)maxs*=0.9;
+  else if(r.ai&&mode==='net')maxs*=r.ai.spd*catchUp(r);
   else if(r.isPlayer)maxs*=catchUp(r); // 역전 장치: 1등과 멀수록 조금 빨라진다 (화면에는 표시 안 함)
   if(r.boost>0)maxs*=1.55;if(r.inSlime)maxs*=0.45;if(r.slow>0)maxs*=r.slowK;if(r.giant>0)maxs*=1.1;if(r.inked>0&&r.ai&&!r.isPlayer)maxs*=0.85;
   const target=maxs*throttle;const acc=target>r.speed?18:26;r.speed+=clamp(target-r.speed,-acc*dt,acc*dt);
@@ -758,7 +763,7 @@ function updateRacer(r,dt){
   if(r.prevIdx>N*0.8&&r.idx<N*0.2){r.lap++;if(r.lap>r.maxLap){r.maxLap=r.lap;onLap(r);}}
   else if(r.prevIdx<N*0.2&&r.idx>N*0.8){r.lap--;}
   if(racing&&!r.falling)interact(r,dt);
-  animate(r,dt);
+  animate(r,dt);actor=null;
 }
 function catchUp(r){let lead=0;for(const o of racers){const p=o.finished?(LAPS+1)*N:prog(o);if(p>lead)lead=p;}
   const d=(lead-prog(r))*LAP_LEN/N;return d<20?1:d<60?1+0.06*(d-20)/40:1.08;}
@@ -793,6 +798,7 @@ function onLap(r){
   if(mode==='solo'&&!finalAt&&r.lap>=LAPS)finalAt=clockNow(); // 선두가 마지막 바퀴에 들어섬
   if(r.lap>=2){r.lapTimes.push(raceTime-r.lapStart);r.lapStart=raceTime;}
   if(r.lap>LAPS&&!r.finished){r.finished=true;r.finishTime=raceTime;
+    if(mode==='net'&&room.isHost&&r.ai&&isBot(r.uid))room.ref.child('bots/'+r.uid+'/fin').set(r2(r.finishTime)).catch(()=>{});
     if(r.isPlayer){if(mode==='net')sendFinish(r.finishTime);const k=ranking().indexOf(r)+1;toast(k===1?'🏆 1등으로 골인!':'골인! '+k+'위',1800);endT=2.8;burst(v3(r.pos.x,2,r.pos.z),0xffd23f,30);}}
   else if(r.isPlayer&&r.lap>=2){toast(r.lap===LAPS?'마지막 바퀴!':'랩 '+r.lap+'/'+LAPS);}
 }
@@ -849,7 +855,7 @@ function bump(a,b){
 //  온라인 (Firebase Realtime Database)
 // ============================================================
 const Net={ready:null,db:null,uid:null,off:0,conn:false,synced:false,rtt:0};
-const room={code:null,ref:null,me:null,meta:null,players:{},isHost:false,raceRound:-1,lobbyRound:-1,cereRound:-1,first:true,sitOut:-1,evQ:null,allDoneAt:0,lastSend:0};
+const room={code:null,ref:null,me:null,meta:null,players:{},bots:{},lastBotSend:0,isHost:false,raceRound:-1,lobbyRound:-1,cereRound:-1,first:true,sitOut:-1,evQ:null,allDoneAt:0,lastSend:0};
 const serverNow=()=>Date.now()+Net.off;
 const clockNow=()=>mode==='net'?serverNow():performance.now();
 const worldT=()=>(mode==='net'&&room.meta?(serverNow()-room.meta.created):performance.now())/1000;
@@ -913,20 +919,24 @@ async function joinRoom(code){
   const ps=v.players||{};if(Object.keys(ps).length>=MAXP&&!ps[Net.uid])throw new Error('roomfull');
   enterRoom(code,false);}
 function enterRoom(code,isHost){
-  mode='net';Object.assign(room,{code,isHost,ref:Net.db.ref('rooms/'+code),meta:null,players:{},raceRound:-1,lobbyRound:-1,cereRound:-1,first:true,sitOut:-1,allDoneAt:0});
+  mode='net';Object.assign(room,{code,isHost,ref:Net.db.ref('rooms/'+code),meta:null,players:{},bots:{},raceRound:-1,lobbyRound:-1,cereRound:-1,first:true,sitOut:-1,allDoneAt:0});
   if(!isHost)writeMe();
   const pr=room.ref.child('players');
   pr.on('child_added',s=>{room.players[s.key]=s.val();onPlayer(s.key);});
   pr.on('child_changed',s=>{room.players[s.key]=s.val();onPlayer(s.key);});
   pr.on('child_removed',s=>{delete room.players[s.key];onPlayerGone(s.key);});
+  const br=room.ref.child('bots'); // 컴퓨터 친구 (선생님 기기가 대신 달린다)
+  br.on('child_added',s=>{room.bots[s.key]=s.val();onPlayer(s.key);});
+  br.on('child_changed',s=>{room.bots[s.key]=s.val();onPlayer(s.key);});
+  br.on('child_removed',s=>{delete room.bots[s.key];onPlayerGone(s.key);});
   const ev=room.ref.child('events');room.evQ=ev.orderByKey().startAt(ev.push().key);
   room.evQ.on('child_added',s=>onEvent(s.val()||{}));
   room.ref.child('meta').on('value',s=>{room.meta=s.val();onMeta();});
 }
 function leaveRoom(msg){
-  if(room.ref){room.ref.child('meta').off();room.ref.child('players').off();if(room.evQ)room.evQ.off();
+  if(room.ref){room.ref.child('meta').off();room.ref.child('players').off();room.ref.child('bots').off();if(room.evQ)room.evQ.off();
     if(room.me){room.me.onDisconnect().cancel();room.me.remove().catch(()=>{});}}
-  Object.assign(room,{code:null,ref:null,me:null,meta:null,players:{},isHost:false,evQ:null});
+  Object.assign(room,{code:null,ref:null,me:null,meta:null,players:{},bots:{},isHost:false,evQ:null});
   mode='solo';spectating=false;clearRace();state='menu';setPlayUI(false);setSpecUI(false);$('count').style.display='none';showScreen('menu');
   if(msg)$('menuMsg').textContent=msg;}
 function closeRoom(){const ref=room.ref,code=room.code;try{localStorage.removeItem('blockdash.host');}catch(_){}
@@ -965,13 +975,16 @@ function startNetRace(){
 function syncRemote(uid){ // 방에 있는 참가자를 화면에 만든다
   const m=room.meta;if(!m||!m.slots||m.slots[uid]===undefined||state==='menu'&&room.raceRound!==m.round)return null;
   if(player&&uid===player.uid)return null;
-  const p=room.players[uid];if(!p)return null;
-  return byUid[uid]||addRacer({uid,name:cleanName(p.n||'친구')||'친구',c:Array.isArray(p.c)?p.c:[0,0,0,0],slot:m.slots[uid],kind:'remote',team:(m.teams||{})[uid],cheer:p.cheer,ab:p.ab});}
+  const p=pdata(uid);if(!p)return null;
+  const kind=isBot(uid)&&room.isHost?'ai':'remote'; // 컴퓨터 친구는 선생님 기기에서 직접 계산
+  return byUid[uid]||addRacer({uid,name:cleanName(p.n||'친구')||'친구',c:Array.isArray(p.c)?p.c:[0,0,0,0],slot:m.slots[uid],kind,team:(m.teams||{})[uid],cheer:p.cheer,ab:p.ab});}
+const isBot=uid=>/^bot\d+$/.test(uid);
+const pdata=uid=>room.players[uid]||room.bots[uid];
 function onPlayer(uid){
   const m=room.meta;if(!m)return;
   if(m.state==='lobby'){if(room.isHost)hostTeams();renderLobby();return;}
   if(room.raceRound!==m.round||state==='cere')return;
-  const r=syncRemote(uid);if(!r||!r.remote)return;const p=room.players[uid];
+  const r=syncRemote(uid);if(!r||!r.remote)return;const p=pdata(uid);
   if(p.fin!=null&&!r.finished){r.finished=true;r.finishTime=p.fin;}
   const s=p.s;if(Array.isArray(s)&&s.length>=9){const L=r.snaps,t=s[0];
     if(t>=(m.startAt-m.created)-4500&&(!L.length||t>L[L.length-1].t)){L.push({t,x:s[1],z:s[2],y:s[3],h:s[4],sp:s[5],f:s[8]});if(L.length>12)L.shift();
@@ -988,40 +1001,52 @@ function updateRemote(r,dt){
     if(f&1024){r.down=r._dn?Math.max(0.05,r.down-dt):DOWN_T;r._dn=1;}else{r.down=0;r._dn=0;}}
   if(dt>0){const vx=(r.pos.x-ox)/dt,vz=(r.pos.z-oz)/dt;if(Math.hypot(vx,vz)<40){r.vx+=(vx-r.vx)*0.4;r.vz+=(vz-r.vz)*0.4;}}
   animate(r,dt);}
-function sendState(){const r=player;if(!r||!room.me||!Net.conn)return;
-  const f=(r.stun>0?1:0)|(r.shield>0?2:0)|(r.boost>0?4:0)|(r.invuln>0?8:0)|(r.grounded?16:0)|(r.falling?32:0)|(r.giant>0?64:0)|(r.inked>0?128:0)|(r.soot>0?256:0)|(r.abT>0?512:0)|(r.down>0?1024:0)|(r.slow>0?2048:0);
-  room.me.child('s').set([Math.round(serverNow()-room.meta.created),r2(r.pos.x),r2(r.pos.z),r2(Math.max(r.y,-30)),r2(r.h),r1(r.speed),r.lap,r.idx,f]).catch(()=>{});}
+function flagsOf(r){return (r.stun>0?1:0)|(r.shield>0?2:0)|(r.boost>0?4:0)|(r.invuln>0?8:0)|(r.grounded?16:0)|(r.falling?32:0)|(r.giant>0?64:0)|(r.inked>0?128:0)|(r.soot>0?256:0)|(r.abT>0?512:0)|(r.down>0?1024:0)|(r.slow>0?2048:0);}
+const stateArr=(r,t)=>[t,r2(r.pos.x),r2(r.pos.z),r2(Math.max(r.y,-30)),r2(r.h),r1(r.speed),r.lap,r.idx,flagsOf(r)];
+function sendState(){const r=player;if(!r||!room.me||!Net.conn)return;room.me.child('s').set(stateArr(r,Math.round(serverNow()-room.meta.created))).catch(()=>{});}
+function sendBots(){if(!room.ref||!Net.conn||!room.meta)return;const up={},t=Math.round(serverNow()-room.meta.created);let n=0; // 선생님 기기: 컴퓨터 친구 위치를 한 번에
+  for(const r of racers){if(r.remote||!r.ai||!isBot(r.uid))continue;up[r.uid+'/s']=stateArr(r,t);n++;}
+  if(n)room.ref.child('bots').update(up).catch(()=>{});}
 function sendFinish(t){if(room.me)room.me.child('fin').set(r2(t)).catch(()=>{});}
-function sendEvent(e){if(!room.ref)return;e.u=Net.uid;room.ref.child('events').push(e).catch(()=>{});}
+let actor=null; // 지금 계산 중인 캐릭터 (컴퓨터 친구가 보낸 알림에 이름표를 붙인다)
+function sendEvent(e){if(!room.ref)return;e.u=Net.uid;if(actor&&actor.ai&&isBot(actor.uid))e.b=actor.uid;room.ref.child('events').push(e).catch(()=>{});}
 function onEvent(e){
-  if(!e||e.u===Net.uid||state==='menu')return;const who=byUid[e.u];
-  if(e.t==='b')spawnBanana(+e.x||0,+e.z||0,e.u,String(e.id));
+  if(!e||e.u===Net.uid||state==='menu')return;const src=e.b||e.u,who=byUid[src],ex=+e.x||0,ez=+e.z||0;
+  const locals=racers.filter(r=>!r.remote),tgt=e.g?byUid[e.g]:null,mine=tgt&&!tgt.remote?tgt:null;
+  if(e.t==='b')spawnBanana(ex,ez,src,String(e.id));
   else if(e.t==='bg'){removeBanana(String(e.id));if(player&&e.g===player.uid&&who)toast(who.name+' 바나나 밟음!');}
   else if(e.t==='w')spawnBalloon(+e.x||0,+e.y||0,+e.z||0,e.u,String(e.g||''),String(e.id));
   else if(e.t==='wp'){removeBalloon(String(e.id));if(player&&e.g===player.uid&&e.h&&who)toast('명중! '+who.name+' 철퍼덕!');}
   else if(e.t==='x')takeBox(e.k|0);
-  else if(e.t==='i'){if(player&&e.g===player.uid)inkOne(player);}
-  else if(e.t==='wh'){ring(+e.x||0,+e.z||0,ABP.whirlR,0x5ad1ff);if(player&&Math.hypot(player.pos.x-(+e.x||0),player.pos.z-(+e.z||0))<ABP.whirlR+1)pushOut(player,+e.x||0,+e.z||0,ABP.whirlP,who);} // 맞는 쪽이 거리 확인
-  else if(e.t==='pd'){const R=Math.min(+e.h||ABP.poundRg,ABP.poundRa);ring(+e.x||0,+e.z||0,R,0xffd23f);if(player&&Math.abs(player.y)<2&&Math.hypot(player.pos.x-(+e.x||0),player.pos.z-(+e.z||0))<R+1)daze(player,who,+e.x||0,+e.z||0);}
-  else if(e.t==='hy')spawnHoney(+e.x||0,+e.z||0,e.u,String(e.id));
-  else if(e.t==='k'&&player&&e.g===player.uid&&Math.hypot(player.pos.x-(+e.x||0),player.pos.z-(+e.z||0))<5)knockDown(player,who||{h:+e.h||0,team:-1}); // 태클: 맞은 쪽 기기에서 거리 확인 후 적용
-  else if(e.t==='l')spawnBolt(String(e.g||''),e.u,String(e.id));}
+  else if(e.t==='i'){if(mine)inkOne(mine);}
+  else if(e.t==='wh'){ring(ex,ez,ABP.whirlR,0x5ad1ff);for(const t of locals)if(Math.hypot(t.pos.x-ex,t.pos.z-ez)<ABP.whirlR+1)pushOut(t,ex,ez,ABP.whirlP,who);} // 맞는 쪽이 거리 확인
+  else if(e.t==='pd'){const R=Math.min(+e.h||ABP.poundRg,ABP.poundRa);ring(ex,ez,R,0xffd23f);for(const t of locals)if(Math.abs(t.y)<2&&Math.hypot(t.pos.x-ex,t.pos.z-ez)<R+1)daze(t,who,ex,ez);}
+  else if(e.t==='hy')spawnHoney(ex,ez,src,String(e.id));
+  else if(e.t==='k'&&mine&&Math.hypot(mine.pos.x-ex,mine.pos.z-ez)<5)knockDown(mine,who||{h:+e.h||0,team:-1}); // 태클: 맞은 쪽 기기에서 거리 확인 후 적용
+  else if(e.t==='l')spawnBolt(String(e.g||''),src,String(e.id));}
 function hostTick(){ // 선생님 기기: 경기 끝났는지 확인
   const m=room.meta;if(!m||m.state!=='count')return;const t=(serverNow()-m.startAt)/1000;if(t<1)return;
-  let present=0,done=0,first=1e9,lead=0;for(const uid in (m.slots||{})){const p=room.players[uid];if(!p)continue;present++;if(p.fin!=null){done++;first=Math.min(first,p.fin);}if(Array.isArray(p.s)&&p.s[6]>lead)lead=p.s[6];}
+  let present=0,done=0,first=1e9,lead=0;for(const r of racers)if(r.lap>lead)lead=r.lap;for(const uid in (m.slots||{})){const p=pdata(uid);if(!p)continue;present++;if(p.fin!=null){done++;first=Math.min(first,p.fin);}if(Array.isArray(p.s)&&p.s[6]>lead)lead=p.s[6];}
   if(!m.finalLapAt&&!room.finalSent&&lead>=LAPS){room.finalSent=true;room.ref.child('meta/finalLapAt').set(Math.round(serverNow()+300)).catch(()=>{});}
   let end=false;
   if(present>0&&done===present){if(!room.allDoneAt)room.allDoneAt=performance.now();else if(performance.now()-room.allDoneAt>3000)end=true;}
   else if(done>0&&t>first+60)end=true;else if(present===0&&t>5)end=true;else if(t>900)end=true;
   if(end){const rk=ranking();room.ref.child('meta').update({state:'result',results:{o:rk.map(r=>r.uid),f:rk.map(r=>r.finished?r2(r.finishTime):-1)}}).catch(()=>{});}}
-function hostStart(){const ids=Object.keys(room.players).sort((a,b)=>(room.players[a].j||0)-(room.players[b].j||0)).slice(0,MAXP);if(!ids.length)return;
+function hostStart(){const ids=Object.keys(room.players).sort((a,b)=>(room.players[a].j||0)-(room.players[b].j||0)).slice(0,MAXP);if(!ids.length&&!(room.meta.bots>0))return;
   const slots={};ids.forEach((u,i)=>slots[u]=i);room.ref.child('events').remove().catch(()=>{});
   let teams=null;const m=room.meta;
-  if(m.mode==='team'){const tc=m.teamCount||3,cnt=new Array(tc).fill(0);teams={}; // 팀을 못 고른 학생은 인원이 적은 팀으로
+  // 컴퓨터 친구: 사람 뒤 자리에, 이름은 겹치지 않게, 능력·세리머니는 골고루
+  const nb=Math.max(0,Math.min(m.bots||0,MAXP-ids.length)),bots={},used=new Set(ids.map(u=>cleanName(room.players[u].n||'')));
+  const pool=AI_NAMES.slice().sort(()=>Math.random()-0.5).map(n=>n+'봇').filter(n=>!used.has(n));const botIds=[];
+  for(let k=0;k<nb;k++){const id='bot'+(k+1);botIds.push(id);slots[id]=ids.length+k;bots[id]={n:pool[k%pool.length],c:[0,1,2,3].map(()=>Math.floor(Math.random()*8)),ab:k%ABIL.length,cheer:k%4};}
+  if(m.mode==='team'){const tc=m.teamCount||3,cnt=new Array(tc).fill(0);teams={}; // 팀을 못 고른 학생과 컴퓨터 친구는 인원이 적은 팀으로
     ids.forEach(u=>{const t=room.players[u].team;if(t>=0&&t<tc){teams[u]=t;cnt[t]++;}});
-    ids.forEach(u=>{if(teams[u]===undefined){const t=cnt.indexOf(Math.min(...cnt));teams[u]=t;cnt[t]++;}});}
-  room.ref.child('meta').update({state:'count',startAt:Math.round(serverNow()+4000),slots,teams,finalLapAt:null,results:null}).catch(e=>toast(netErrText(e)));}
-function hostAgain(){room.ref.child('meta').update({state:'lobby',round:(room.meta.round||1)+1,slots:null,startAt:null,teams:null,finalLapAt:null,results:null}).catch(e=>toast(netErrText(e)));}
+    ids.concat(botIds).forEach(u=>{if(teams[u]===undefined){const t=cnt.indexOf(Math.min(...cnt));teams[u]=t;cnt[t]++;}});}
+  const up={'meta/state':'count','meta/startAt':Math.round(serverNow()+4000),'meta/slots':slots,'meta/teams':teams,'meta/finalLapAt':null,'meta/results':null};
+  if(nb)up.bots=bots;else if(Object.keys(room.bots).length)up.bots=null; // 컴퓨터 친구를 쓸 때만 (예전 규칙에서도 시작은 되게)
+  room.ref.update(up).catch(e=>toast(netErrText(e)));}
+function hostAgain(){const up={'meta/state':'lobby','meta/round':(room.meta.round||1)+1,'meta/slots':null,'meta/startAt':null,'meta/teams':null,'meta/finalLapAt':null,'meta/results':null};if(Object.keys(room.bots).length)up.bots=null;room.ref.update(up).catch(e=>toast(netErrText(e)));}
+function setBots(n){const max=MAXP-Object.keys(room.players).length;hostSet({bots:clamp(n,0,Math.max(0,max))});}
 // 팀 나누기 (선생님 기기): 자동이면 들어온 순서대로 돌아가며, 팀이 없는 학생은 인원이 적은 팀으로
 const sortedIds=()=>Object.keys(room.players).sort((a,b)=>(room.players[a].j||0)-(room.players[b].j||0));
 function setTeam(u,t){const p=room.players[u];if(!p||p.team===t)return;p.team=t;room.ref.child('players/'+u+'/team').set(t).catch(()=>{});}
@@ -1051,10 +1076,11 @@ function renderLobby(){
         b.onclick=()=>{if(room.me)room.me.child('team').set(k).catch(()=>{});};wt.appendChild(b);}}
     else wt.innerHTML='';}
   else{html=ids.map(chip).join('');$('waitTeams').innerHTML='';}
-  if(room.isHost){$('hostCode').textContent=room.code;$('hostUrl').textContent=location.host+location.pathname.replace(/index\.html$/,'');$('hostCount').textContent='들어온 친구 '+ids.length+' / '+MAXP+'명';
-    $('hostList').innerHTML=html||'<span style="color:#999;font-size:18px">친구들을 기다리는 중…</span>';$('hostStart').disabled=!ids.length;hostSegs();
+  const nb=Math.max(0,Math.min(m.bots||0,MAXP-ids.length));if(nb)html+='<div class="chip bot">🤖 컴퓨터 친구 '+nb+'명'+(team?' (출발할 때 팀 배정)':'')+'</div>';
+  if(room.isHost){$('hostCode').textContent=room.code;$('hostUrl').textContent=location.host+location.pathname.replace(/index\.html$/,'');$('hostCount').textContent='들어온 친구 '+ids.length+'명'+(nb?' + 컴퓨터 '+nb+'명':'')+' / 최대 '+MAXP+'명';$('botNum').textContent=nb;$('botPlus').disabled=ids.length+nb>=MAXP;$('botMinus').disabled=nb<=0;
+    $('hostList').innerHTML=html||'<span style="color:#999;font-size:18px">친구들을 기다리는 중…</span>';$('hostStart').disabled=!ids.length&&!nb;hostSegs();
     if(team)$('hostList').querySelectorAll('.chip').forEach(el=>{el.onclick=()=>{const u=el.dataset.u,p=room.players[u];if(!p)return;setTeam(u,((p.team>=0?p.team:-1)+1)%tc);renderLobby();};});}
-  else{$('waitTitle').textContent='방 '+room.code+' · '+ids.length+'명'+(team?' · 팀전':'');$('waitList').innerHTML=html;}}
+  else{$('waitTitle').textContent='방 '+room.code+' · '+ids.length+'명'+(nb?' + 🤖'+nb:'')+(team?' · 팀전':'');$('waitList').innerHTML=html;}}
 
 // ---------- race start ----------
 function beginRace(){ // startAt·racers 준비된 뒤 호출
@@ -1115,6 +1141,7 @@ function frame(now){
     for(const r of racers){if(r.remote)updateRemote(r,dt);else updateRacer(r,dt);}
     if(state==='race')for(let i=0;i<racers.length;i++)for(let j=i+1;j<racers.length;j++){const a=racers[i],b=racers[j];if(a.remote&&b.remote)continue;if(a.remote)bump(b,a);else bump(a,b);}
     if(mode==='net'&&player&&now-room.lastSend>=SEND_MS){room.lastSend=now;sendState();}
+    if(mode==='net'&&room.isHost&&now-room.lastBotSend>=SEND_MS){room.lastBotSend=now;sendBots();}
     if(mode==='net'&&room.isHost&&now-hostT>500){hostT=now;hostTick();}
   }
   // bananas — 밟았는지는 밟은 쪽 기기가 판정
@@ -1256,6 +1283,7 @@ $('joinBack').onclick=()=>showScreen('menu');
 $('joinGo').onclick=()=>{if(codeStr.length===4)guard($('joinMsg'),()=>joinRoom(codeStr));};
 $('waitLeave').onclick=()=>leaveRoom();
 $('hostStart').onclick=hostStart;
+$('botMinus').onclick=()=>setBots((room.meta.bots||0)-1);$('botPlus').onclick=()=>setBots((room.meta.bots||0)+1);$('botFill').onclick=()=>setBots(MAXP);
 $('hostClose').onclick=closeRoom;
 $('againBtn').onclick=()=>{if(mode==='net'){if(room.isHost)hostAgain();}else startSolo();};
 $('menuBtn').onclick=()=>{if(mode==='net'){room.isHost?closeRoom():leaveRoom();}else{clearRace();state='menu';showScreen('menu');}};
