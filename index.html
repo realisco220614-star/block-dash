@@ -1370,7 +1370,9 @@ function hostTeams(all){const m=room.meta;if(!m||m.mode!=='team'||m.state!=='lob
 function hostSet(patch,reassign){const m=Object.assign({},room.meta,patch);room.meta=m;room.ref.child('meta').update(patch).catch(e=>toast(netErrText(e)));
   if(reassign&&m.mode==='team'&&m.teamPick==='auto')hostTeams(true);else hostTeams();renderLobby();}
 function hostSegs(){const m=room.meta;
-  seg($('hMapSeg'),MAP_OPTS,()=>room.meta.map||'sky',v=>hostSet({map:v}));
+  seg($('hMapSeg'),MAP_OPTS,()=>room.meta.map||'sky',v=>{room.meta=Object.assign({},room.meta,{map:v});room.ref.child('meta').update({map:v}).catch(e=>{ // 예전 보안 규칙이면 map을 못 써서 권한 오류가 난다
+    room.meta=Object.assign({},room.meta,{map:'sky'});[...$('hMapSeg').children].forEach((x,i)=>x.classList.toggle('on',MAP_OPTS[i][0]==='sky'));
+    toast(/PERMISSION|permission/.test(String(e&&(e.code||e.message)))?'고스트 하우스를 쓰려면 Firebase 규칙을 새로 붙여 넣어야 해요 (설명서 참고)':netErrText(e),4000);});});
   seg($('hModeSeg'),[['solo','개인전'],['team','팀전']],()=>room.meta.mode||'solo',v=>hostSet({mode:v},true));
   seg($('hCountSeg'),[[2,'2팀'],[3,'3팀']],()=>room.meta.teamCount||3,v=>hostSet({teamCount:v},true));
   seg($('hPickSeg'),[['auto','자동으로 나누기'],['choose','학생이 고르기']],()=>room.meta.teamPick||'auto',v=>hostSet({teamPick:v},true));
