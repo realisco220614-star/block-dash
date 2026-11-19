@@ -298,15 +298,32 @@ const renderer=new THREE.WebGLRenderer({canvas,antialias:DPR<1.5,powerPreference
 renderer.setPixelRatio(DPR);
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x8fd8ff);
-scene.fog=new THREE.Fog(0x8fd8ff,90,300);
-const camera=new THREE.PerspectiveCamera(65,1,0.1,900);
+scene.fog=new THREE.Fog(0xcfe9ff,90,320);
+// 위는 진한 하늘색, 지평선은 연한 분홍빛으로 번지는 하늘 돔
+const SKY_TOP=new THREE.Color(0x5fb8ff),SKY_MID=new THREE.Color(0xa9dcff),SKY_LOW=new THREE.Color(0xffe0f0);
+const SUN_TOP=new THREE.Color(0xff8a5c),SUN_MID=new THREE.Color(0xffb38a),SUN_LOW=new THREE.Color(0xffd6e8);
+const skyU={top:{value:SKY_TOP.clone()},mid:{value:SKY_MID.clone()},low:{value:SKY_LOW.clone()}};
+const skyDome=new THREE.Mesh(new THREE.SphereGeometry(800,32,16),new THREE.ShaderMaterial({uniforms:skyU,side:THREE.BackSide,depthWrite:false,fog:false,
+  vertexShader:'varying vec3 vp;void main(){vp=normalize(position);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
+  fragmentShader:'uniform vec3 top,mid,low;varying vec3 vp;void main(){float h=vp.y;vec3 c=h>0.0?mix(mid,top,smoothstep(0.0,0.6,h)):mix(mid,low,smoothstep(0.0,-0.35,h));gl_FragColor=vec4(c,1.0);}'}));
+skyDome.renderOrder=-1;scene.add(skyDome);
+const sunSprite=new THREE.Sprite(new THREE.SpriteMaterial({map:(()=>{const c=document.createElement('canvas');c.width=c.height=128;const g=c.getContext('2d');const gr=g.createRadialGradient(64,64,0,64,64,64);
+  gr.addColorStop(0,'rgba(255,255,240,1)');gr.addColorStop(0.25,'rgba(255,250,215,1)');gr.addColorStop(0.45,'rgba(255,236,170,0.55)');gr.addColorStop(1,'rgba(255,236,170,0)');g.fillStyle=gr;g.fillRect(0,0,128,128);return new THREE.CanvasTexture(c);})(),fog:false,depthWrite:false,transparent:true}));
+sunSprite.scale.set(160,160,1);scene.add(sunSprite);
+const camera=new THREE.PerspectiveCamera(65,1,0.1,1800);
 let BASE_FOV=65;
 function resize(){renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;BASE_FOV=camera.aspect<1?82:65;if(!camera.view)camera.fov=BASE_FOV;camera.updateProjectionMatrix();resetJoyBase();}
-scene.add(new THREE.HemisphereLight(0xffffff,0xb9c8ff,0.72));
-const sun=new THREE.DirectionalLight(0xffffff,0.38);sun.position.set(60,120,40);scene.add(sun);
+scene.add(new THREE.HemisphereLight(0xfffaf0,0xa9b4f0,0.66));
+const sun=new THREE.DirectionalLight(0xfff4e0,0.5);sun.position.set(60,120,40);scene.add(sun);
 
 const matCache={};
-const mat=c=>matCache[c]||(matCache[c]=new THREE.MeshLambertMaterial({color:c}));
+// 블록 가장자리에 살짝 어두운 테두리와 위쪽 밝은 줄 → 블록이 또렷하고 입체적으로 보인다
+function edgeTexture(dark,light){const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d');
+  g.fillStyle='#fff';g.fillRect(0,0,64,64);const gr=g.createRadialGradient(32,32,18,32,32,46);gr.addColorStop(0,'rgba(0,0,0,0)');gr.addColorStop(1,'rgba(0,0,0,'+dark*0.6+')');g.fillStyle=gr;g.fillRect(0,0,64,64);
+  g.strokeStyle='rgba(0,0,0,'+dark+')';g.lineWidth=4;g.strokeRect(2,2,60,60);g.fillStyle='rgba(255,255,255,'+light+')';g.fillRect(5,5,54,4);
+  const t=new THREE.CanvasTexture(c);t.anisotropy=2;return t;}
+const EDGE=edgeTexture(0.2,0.45),EDGE_SOFT=edgeTexture(0.07,0.3);
+const mat=c=>matCache[c]||(matCache[c]=new THREE.MeshLambertMaterial({color:c,map:EDGE}));
 const BOX=new THREE.BoxGeometry(1,1,1);
 function box(w,h,d,c,x,y,z,parent){const m=new THREE.Mesh(BOX,mat(c));m.scale.set(w,h,d);m.position.set(x||0,y||0,z||0);if(parent)parent.add(m);return m;}
 function makeTex(w,h,draw){const c=document.createElement('canvas');c.width=w;c.height=h;draw(c.getContext('2d'),w,h);return new THREE.CanvasTexture(c);}
@@ -331,16 +348,28 @@ function nearest(x,z,guess){let best=guess,bd=1e18;for(let k=-28;k<=28;k++){cons
 function nearestAll(x,z){let best=0,bd=1e18;for(let j=0;j<N;j++){const dx=P[j].x-x,dz=P[j].z-z;const d=dx*dx+dz*dz;if(d<bd){bd=d;best=j;}}return best;}
 function latOf(x,z,i){return (x-P[i].x)*NM[i].x+(z-P[i].z)*NM[i].z;}
 
-const roadTex=makeTex(256,128,(g,w,h)=>{g.fillStyle='#b9a7ff';g.fillRect(0,0,w,h/2);g.fillStyle='#c8bbff';g.fillRect(0,h/2,w,h/2);
-  g.fillStyle='rgba(255,255,255,.75)';g.fillRect(w/2-4,0,8,h/2);
-  for(const x of[0,w-12]){g.fillStyle='#ffffff';g.fillRect(x,0,12,h/2);g.fillStyle='#ff6fa8';g.fillRect(x,h/2,12,h/2);}});
-roadTex.wrapT=THREE.RepeatWrapping;
-strip(0,N,-HALF,HALF,0.02,new THREE.MeshLambertMaterial({map:roadTex,side:THREE.DoubleSide}),N/16);
+// 길: 연보라 타일 (가로 8칸 × 세로 8칸, 한 장이 길 20칸 길이), 가운데 점선, 양쪽 분홍·흰 경고 줄
+const roadTex=makeTex(512,512,(g,w,h)=>{const T=8,tw=(w-48)/T,th=h/8;g.fillStyle='#a996f0';g.fillRect(0,0,w,h);
+  for(let y=0;y<8;y++)for(let x=0;x<T;x++){const off=(y%2)*tw/2,l=0.92+((x*7+y*13)%5)*0.022;const r=Math.round(196*l),gg=Math.round(184*l),b=Math.round(255*Math.min(1,l+0.04));
+    g.fillStyle='rgb('+r+','+gg+','+b+')';const X=24+((x*tw+off)%(w-48));g.fillRect(X+2,y*th+2,Math.min(tw-4,w-24-X-2),th-4);if(X+tw>w-24)g.fillRect(26,y*th+2,X+tw-(w-24)-4,th-4);
+    g.fillStyle='rgba(255,255,255,.35)';g.fillRect(X+2,y*th+2,Math.min(tw-4,w-24-X-2),3);}
+  g.fillStyle='rgba(255,255,255,.85)';for(let y=0;y<8;y+=2)g.fillRect(w/2-5,y*th+12,10,th*1-24);
+  for(let y=0;y<8;y++){g.fillStyle=y%2?'#ff6fa8':'#ffffff';g.fillRect(0,y*th,24,th);g.fillRect(w-24,y*th,24,th);}
+  g.fillStyle='rgba(0,0,0,.12)';g.fillRect(24,0,3,h);g.fillRect(w-27,0,3,h);});
+roadTex.wrapT=THREE.RepeatWrapping;roadTex.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+strip(0,N,-HALF,HALF,0.02,new THREE.MeshLambertMaterial({map:roadTex,side:THREE.DoubleSide}),N/40);
 // 길 두께(옆면·밑면)
-{const sideTex=makeTex(64,64,(g,w,h)=>{g.fillStyle='#8f79e6';g.fillRect(0,0,w,h);g.fillStyle='#7c66d6';g.fillRect(0,h/2,w,h/2);g.fillStyle='#a996f5';g.fillRect(0,0,10,h);});
+{const sideTex=makeTex(128,128,(g,w,h)=>{g.fillStyle='#6e58c9';g.fillRect(0,0,w,h); // 왼쪽(u=0)이 길 가장자리 쪽
+  g.fillStyle='#b9a7ff';g.fillRect(0,0,14,h);g.fillStyle='#ff9cc9';g.fillRect(14,0,4,h);
+  const cols=['#8a74e0','#7f69d8','#9682ea','#7560cf'];for(let r=0;r<4;r++)for(let k=0;k<5;k++){const x=18+r*27,y=((k*32+(r%2)*16)%h);g.fillStyle=cols[(r+k)%4];g.fillRect(x+2,y+2,23,28);g.fillStyle='rgba(255,255,255,.18)';g.fillRect(x+2,y+2,23,3);g.fillStyle='rgba(0,0,0,.14)';g.fillRect(x+2,y+27,23,3);}});
  sideTex.wrapT=THREE.RepeatWrapping;const sm=new THREE.MeshLambertMaterial({map:sideTex,side:THREE.DoubleSide});
  strip(0,N,-HALF,-HALF+1.2,0.02,sm,N/8,-3);strip(0,N,HALF,HALF-1.2,0.02,sm,N/8,-3);
- strip(0,N,-HALF+1.2,HALF-1.2,-3,new THREE.MeshLambertMaterial({color:0x6a55c4,side:THREE.DoubleSide}),1);}
+ strip(0,N,-HALF+1.2,HALF-1.2,-3,new THREE.MeshLambertMaterial({color:0x5d48b5,side:THREE.DoubleSide}),1);
+ // 길 아래 매달린 바위 → 하늘에 떠 있는 섬 느낌 (한 번에 그리는 인스턴스)
+ const cnt=Math.floor(N/4),rock=new THREE.InstancedMesh(BOX,new THREE.MeshLambertMaterial({color:0xffffff,map:EDGE}),cnt*3),d=new THREE.Object3D();let n=0;const rc=[0x6e58c9,0x7a64d4,0x5f4bb8,0x8a74e0];
+ for(let i=0;i<N;i+=4)for(let k=0;k<2;k++){if(n>=cnt*3-1)break;const lat=rnd(-7,7),s=rnd(2,4.2),hgt=rnd(1.5,4.5);const p=trackPt(i+Math.floor(rnd(0,3)),lat,-3-hgt/2+0.3);d.position.copy(p);d.rotation.set(0,ANG[wrap(i)],0);d.scale.set(s,hgt,s*rnd(0.8,1.3));d.updateMatrix();rock.setMatrixAt(n,d.matrix);rock.setColorAt(n,new THREE.Color(rc[(i+k)%4]));n++;
+   if(Math.random()<0.35&&n<cnt*3){d.position.y-=hgt/2+0.8;d.scale.set(s*0.55,1.6,s*0.55);d.updateMatrix();rock.setMatrixAt(n,d.matrix);rock.setColorAt(n,new THREE.Color(0x5a46b0));n++;}}
+ rock.count=n;scene.add(rock);}
 
 // bounds
 let minX=1e9,maxX=-1e9,minZ=1e9,maxZ=-1e9;P.forEach(p=>{minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);minZ=Math.min(minZ,p.z);maxZ=Math.max(maxZ,p.z);});
@@ -350,14 +379,14 @@ function distToTrack(x,z){let b=1e18;for(let i=0;i<N;i+=5){const dx=P[i].x-x,dz=
 // 구름 (위·아래) — 한 번에 그리는 인스턴스
 const cloudGroup=new THREE.Group();cloudGroup.position.set(CX,0,CZ);scene.add(cloudGroup);
 let highClouds=null;
-{const cmat=new THREE.MeshLambertMaterial({color:0xffffff}),d=new THREE.Object3D();
+{const cmat=new THREE.MeshLambertMaterial({color:0xffffff,map:EDGE_SOFT,emissive:0x303848}),d=new THREE.Object3D();
  const mk=(C,below)=>{const cm=new THREE.InstancedMesh(BOX,cmat,C*4);let n=0;
   for(let k=0;k<C;k++){const cx=rnd(-190,190),cz=rnd(-170,170),cy=below?rnd(-48,-24):rnd(40,70);const big=below?1.8:1;
    for(let j=0;j<4;j++){d.position.set(cx+rnd(-6,6)*big,cy+rnd(-1,1),cz+rnd(-4,4)*big);d.scale.set(rnd(6,12)*big,rnd(2.5,4),rnd(5,9)*big);d.updateMatrix();cm.setMatrixAt(n++,d.matrix);}}
   cloudGroup.add(cm);return cm;};
  mk(32,true);highClouds=mk(14,false);}
 // 떠 있는 작은 섬
-{const T=16,white=()=>new THREE.MeshLambertMaterial({color:0xffffff});
+{const T=16,white=()=>new THREE.MeshLambertMaterial({color:0xffffff,map:EDGE});
  const grass=new THREE.InstancedMesh(BOX,mat(0x7ed957),T),dirt=new THREE.InstancedMesh(BOX,mat(0x9a6b4a),T),trunk=new THREE.InstancedMesh(BOX,mat(0x8d5a3b),T),leaf=new THREE.InstancedMesh(BOX,white(),T);
  const d=new THREE.Object3D();let n=0,guard=0;const greens=[0x3fae4a,0x55c35a,0x2e9a44,0xff9ccf];
  while(n<T&&guard++<2000){const x=rnd(minX-60,maxX+60),z=rnd(minZ-60,maxZ+60);if(distToTrack(x,z)<HALF+9||Math.hypot(x-POD.x,z-POD.z)<30)continue;const y=rnd(-14,5),s=rnd(5,9),hg=rnd(1.8,3);
@@ -1128,7 +1157,8 @@ function frame(now){
   const wt=worldT(),fa=finalAt>0?Math.max(0,(clockNow()-finalAt)/1000):0; // fa: 마지막 바퀴가 시작되고 지난 시간
   if(fa>0&&!finalShown&&(state==='race'||state==='count')){finalShown=true;itemBoxes.forEach(b=>b.m.material=goldMat);
     if(fa<2.5){const bn=$('banner');bn.textContent='🔥 마지막 바퀴!';bn.classList.remove('hidden');setTimeout(()=>bn.classList.add('hidden'),2000);}}
-  {const k=state==='menu'?0:clamp(fa/3,0,1);if(k!==skyK){skyK=k;scene.background.setHex(SKY).lerp(new THREE.Color(SUNSET),k);scene.fog.color.copy(scene.background);}} // 노을빛으로 3초 동안
+  {const k=state==='menu'?0:clamp(fa/3,0,1);if(k!==skyK){skyK=k;scene.background.setHex(SKY).lerp(new THREE.Color(SUNSET),k);skyU.top.value.copy(SKY_TOP).lerp(SUN_TOP,k);skyU.mid.value.copy(SKY_MID).lerp(SUN_MID,k);skyU.low.value.copy(SKY_LOW).lerp(SUN_LOW,k);scene.fog.color.copy(skyU.mid.value).lerp(skyU.low.value,0.35);}}
+  skyDome.position.copy(camera.position);sunSprite.position.set(camera.position.x+300,camera.position.y+330,camera.position.z+200); // 하늘·해는 늘 카메라를 둘러싼다 // 노을빛으로 3초 동안
   // 속도가 바뀌어도 튀지 않게: 각도 = 원래 속도 × 전체 시간 + 늘어난 속도 × 마지막 바퀴 이후 시간
   for(const s of spinners){s.a=s.a0+s.spd*(wt+0.5*fa);s.rot.rotation.y=s.a;}
   for(const w of walls){const nl=Math.sin((wt+0.4*fa)*1.4+w.ph)*(HALF-1.4); /* 길 끝까지 움직인다 */w.v=clamp((nl-w.lat)/Math.max(dt,1e-3),-15,15);w.lat=nl;place(w.m,w.i,nl,1.1);}
