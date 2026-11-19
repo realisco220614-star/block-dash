@@ -504,7 +504,15 @@ const GY=(x,z)=>MAP.kind==='sky'?0:PY[nearestAll(x,z)];
 // ============================================================
 //  고스트 하우스: 성 1층 → 2층 → 옥상(밤, 보름달). 한 방향 코스, 떨어지는 곳은 구멍뿐.
 // ============================================================
-const GH_STEP=0.5,GH_L=255,GH_A=11,GH_R=30,GH_HALF=HALF;
+const GH_STEP=0.5,GH_L=255,GH_A=11,GH_R=30,GH_HALF=8.5,GH_RAMP=70; // 고스트 하우스 길 폭은 17 (스카이러닝 20)
+// 갈림길: 입구는 길 하나를 셋으로 나눈 좁은 문, 안으로 들어가면 길마다 층 길과 같은 폭으로 넓어진다 (나올 때 다시 모인다)
+function forkU(F,i){if(i<F.da||i>F.db)return -1;let u=Math.min((i-F.da-4)/28,(F.db-4-i)/28);u=clamp(u,0,1);return u*u*(3-2*u);}
+function laneC(F,ln,i){const u=Math.max(0,forkU(F,i));return (ln-2)*((1-u)*2*GH_HALF/3+u*(2*GH_HALF+2.4));}
+function laneH(F,i){const u=Math.max(0,forkU(F,i));return (1-u)*(GH_HALF/3-0.55)+u*GH_HALF;}
+function ribbon(i0,i1,fa,fb,ya,yb,material,vRep){const pos=[],uv=[],ind=[],len=i1-i0;
+  for(let k=0;k<=len;k++){const i=i0+k,a=trackPt(i,fa(i),ya),b=trackPt(i,fb(i),yb);pos.push(a.x,a.y,a.z,b.x,b.y,b.z);const v=k/len*(vRep||1);uv.push(0,v,1,v);if(k<len){const q=k*2;ind.push(q,q+2,q+1,q+1,q+2,q+3);}}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(ind);g.computeVertexNormals();
+  const m=new THREE.Mesh(g,material);WORLD.add(m);return m;}
 function applyMapVars(M){({N,LOOP,P,TG,NM,ANG,PY,LAP_LEN,minX,maxX,minZ,maxZ,CX,CZ,POD,hurdles,spinners,walls,bumpers,boosts,slimes,jumps,itemBoxes,bridges}=M);
   for(const k in MAPS)MAPS[k].world.visible=MAPS[k]===M;WORLD=M.world;MAP=M;}
 function ghostTex(){
@@ -547,8 +555,8 @@ function buildGhost(){
   const arc=(cx,cz,R,a0,a1,y)=>{const n=Math.ceil(Math.abs(a1-a0)*R/0.05);for(let k=1;k<=n;k++){const a=a0+(a1-a0)*k/n;push(cx+Math.cos(a)*R,cz+Math.sin(a)*R,y);}};
   push(-30,0,0);const cut=()=>pts.length-1;
   const L=GH_L,R=GH_R;
-  line(-30,0,0,0,0,0);mark.start=cut();S(0,0,1,0);mark.f1e=cut();arc(L,R,R,-Math.PI/2,Math.PI/2,0);mark.k1a=cut();line(L,2*R,L-50,2*R,0,10);mark.k1b=cut();
-  S(L-50,2*R,-1,10);mark.f2e=cut();arc(-50,3*R,R,-Math.PI/2,-3*Math.PI/2,10);mark.k2a=cut();line(-50,4*R,0,4*R,10,20);mark.k2b=cut();S(0,4*R,1,20);mark.f3e=cut();line(L,4*R,L+36,4*R,20,20);
+  line(-30,0,0,0,0,0);mark.start=cut();S(0,0,1,0);mark.f1e=cut();arc(L,R,R,-Math.PI/2,Math.PI/2,0);mark.k1a=cut();line(L,2*R,L-GH_RAMP,2*R,0,10);mark.k1b=cut();
+  S(L-GH_RAMP,2*R,-1,10);mark.f2e=cut();arc(-GH_RAMP,3*R,R,-Math.PI/2,-3*Math.PI/2,10);mark.k2a=cut();line(-GH_RAMP,4*R,0,4*R,10,20);mark.k2b=cut();S(0,4*R,1,20);mark.f3e=cut();line(L,4*R,L+36,4*R,20,20);
   // 같은 간격(0.5)으로 다시 나누기
   const cum=[0];for(let k=1;k<pts.length;k++)cum.push(cum[k-1]+Math.hypot(pts[k][0]-pts[k-1][0],pts[k][1]-pts[k-1][1]));const total=cum[cum.length-1];
   N=Math.floor(total/GH_STEP);LOOP=false;P=[];TG=[];NM=[];ANG=[];PY=[];let j=0;
@@ -557,7 +565,7 @@ function buildGhost(){
   for(let i=0;i<N;i++){const a=P[Math.max(0,i-1)],b=P[Math.min(N-1,i+1)];const t=new THREE.Vector3(b.x-a.x,0,b.z-a.z).normalize();TG.push(t);NM.push(new THREE.Vector3(t.z,0,-t.x));ANG.push(Math.atan2(t.x,t.z));}
   const ix=k=>Math.round(cum[k]/GH_STEP);LAP_LEN=N*GH_STEP;
   const G={start:ix(mark.start),f1:[ix(mark.start),ix(mark.f1e)],f2:[ix(mark.k1b),ix(mark.f2e)],f3:[ix(mark.k2b),ix(mark.f3e)],forks:[{a:ix(mark.k1a),b:ix(mark.k1b)},{a:ix(mark.k2a),b:ix(mark.k2b)}]};
-  G.finish=G.f3[1]+20;G.f3start=G.f3[0];
+  G.finish=G.f3[1]+20;G.f3start=G.f3[0];G.forks.forEach(F=>{F.da=F.a+6;F.db=F.b-2;});
   minX=1e9;maxX=-1e9;minZ=1e9;maxZ=-1e9;P.forEach(p=>{minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);minZ=Math.min(minZ,p.z);maxZ=Math.max(maxZ,p.z);});
   CX=(minX+maxX)/2;CZ=(minZ+maxZ)/2;POD={x:CX,z:maxZ+62};
   hurdles=[];spinners=[];walls=[];bumpers=[];boosts=[];slimes=[];jumps=[];itemBoxes=[];bridges=[];
@@ -566,52 +574,59 @@ function buildGhost(){
   const mFloor=new THREE.MeshLambertMaterial({map:T.floor,side:THREE.DoubleSide}),mStair=new THREE.MeshLambertMaterial({map:T.stair,side:THREE.DoubleSide}),mRoof=new THREE.MeshLambertMaterial({map:T.roof,side:THREE.DoubleSide});
   const mWall=new THREE.MeshLambertMaterial({map:T.wall,side:THREE.DoubleSide}),mUnder=new THREE.MeshLambertMaterial({color:0x1a1522,side:THREE.DoubleSide});
   const seg=(a,b,m,vrep)=>strip(a,b-a,-GH_HALF,GH_HALF,0.02,m,(b-a)*GH_STEP/vrep);
-  seg(0,G.forks[0].a,mFloor,20);seg(G.forks[0].a,G.forks[0].b,mStair,6);seg(G.forks[0].b,G.forks[1].a,mFloor,20);seg(G.forks[1].a,G.forks[1].b,mStair,6);seg(G.forks[1].b,N-1,mRoof,20);
+  const F0=G.forks[0],F1=G.forks[1];seg(0,F0.a,mFloor,20);seg(F0.a,F0.da,mStair,6);seg(F0.db,F0.b,mStair,6);seg(F0.b,F1.a,mFloor,20);seg(F1.a,F1.da,mStair,6);seg(F1.db,F1.b,mStair,6);seg(F1.b,N-1,mRoof,20);
   strip(0,N-1,-GH_HALF,GH_HALF,-2.5,mUnder,1);
   const indoorEnd=G.forks[1].b;
-  for(const s of[-1,1]){strip(0,indoorEnd,s*(GH_HALF+0.3),s*(GH_HALF+0.3),7.5,mWall,indoorEnd*GH_STEP/8,-2.5); // 성 안 벽 (높이 7.5)
+  for(const s of[-1,1]){for(const [p,q] of[[0,F0.da],[F0.db,F1.da],[F1.db,indoorEnd]])strip(p,q-p,s*(GH_HALF+0.3),s*(GH_HALF+0.3),7.5,mWall,(q-p)*GH_STEP/8,-2.5); // 성 안 벽 (높이 7.5, 갈림길 안은 따로)
     strip(indoorEnd-1,N-1-indoorEnd+1,s*(GH_HALF+0.3),s*(GH_HALF+0.3),1.3,mWall,(N-indoorEnd)*GH_STEP/8,-14);} // 옥상 성벽 (낮음) + 아래로 성 외벽
   // 터널 천장 (2층 → 옥상 갈림길) 과 출구 아치
-  strip(G.forks[1].a,G.forks[1].b-G.forks[1].a,-GH_HALF-0.4,GH_HALF+0.4,7.5,mUnder,1);
-  {const g=new THREE.Group();place(g,G.forks[1].b,0,0);WORLD.add(g);box(2,9,2,0x3b3247,-GH_HALF-0.6,4.5,0,g);box(2,9,2,0x3b3247,GH_HALF+0.6,4.5,0,g);box(W+3.2,2,2,0x3b3247,0,8.6,0,g);}
+  strip(F1.a,F1.da-F1.a,-GH_HALF-0.4,GH_HALF+0.4,7.5,mUnder,1);strip(F1.db,F1.b-F1.db,-GH_HALF-0.4,GH_HALF+0.4,7.5,mUnder,1);
+  {const g=new THREE.Group();place(g,G.forks[1].b,0,0);WORLD.add(g);box(2,9,2,0x3b3247,-GH_HALF-0.6,4.5,0,g);box(2,9,2,0x3b3247,GH_HALF+0.6,4.5,0,g);box(2*GH_HALF+3.2,2,2,0x3b3247,0,8.6,0,g);}
   // 옥상 성벽 위 톱니(총안) + 등불
   {const n=Math.floor((N-indoorEnd)/5)*2,me=new THREE.InstancedMesh(BOX,mat(0x4a4260),n+2),d=new THREE.Object3D();let c=0;const lp=[];
    for(let i=indoorEnd+2;i<N-2&&c<n;i+=5)for(const s of[-1,1]){const p=trackPt(i,s*(GH_HALF+0.3),1.75);d.position.copy(p);d.rotation.set(0,ANG[i],0);d.scale.set(1.1,0.9,1.4);d.updateMatrix();me.setMatrixAt(c++,d.matrix);if(i%40<5)lp.push(p.x,p.y+1,p.z);}
    me.count=c;WORLD.add(me);const pg=new THREE.BufferGeometry();pg.setAttribute('position',new THREE.Float32BufferAttribute(lp,3));
    WORLD.add(new THREE.Points(pg,new THREE.PointsMaterial({size:2.4,map:T.lantern,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,color:0xffc070})));}
   // 앞뒤 끝 벽
-  for(const i of[0,N-1]){const g=new THREE.Group();place(g,i,0,0);WORLD.add(g);box(W+1.4,i?1.3:7.5,1,0x2e2638,0,i?0.65:3.75,i?0.6:-0.6,g);}
+  for(const i of[0,N-1]){const g=new THREE.Group();place(g,i,0,0);WORLD.add(g);box(2*GH_HALF+1.4,i?1.3:7.5,1,0x2e2638,0,i?0.65:3.75,i?0.6:-0.6,g);}
   // --- 촛불 (벽에 군데군데) ---
-  {const pos=[],hold=new THREE.InstancedMesh(BOX,mat(0x2c2531),200),cand=new THREE.InstancedMesh(BOX,mat(0xf1e6c8),200),d=new THREE.Object3D();let c=0;
-   for(let i=8;i<indoorEnd&&c<199;i+=16)for(const s of[-1,1]){if(c>=199)break;const p=trackPt(i,s*(GH_HALF-0.15),3);d.rotation.set(0,ANG[i],0);d.position.copy(p);d.scale.set(0.55,0.25,0.5);d.updateMatrix();hold.setMatrixAt(c,d.matrix);
-     d.position.y+=0.42;d.scale.set(0.22,0.6,0.22);d.updateMatrix();cand.setMatrixAt(c,d.matrix);pos.push(p.x,p.y+0.95,p.z);c++;}
+  {const pos=[],hold=new THREE.InstancedMesh(BOX,mat(0x2c2531),400),cand=new THREE.InstancedMesh(BOX,mat(0xf1e6c8),400),d=new THREE.Object3D();let c=0;
+   for(let i=8;i<indoorEnd&&c<399;i+=16){const fk=G.forks.find(F=>i>=F.da&&i<=F.db),lats=fk?[1,2,3].flatMap(ln=>[-1,1].map(s=>laneC(fk,ln,i)+s*(laneH(fk,i)-0.15))):[-GH_HALF+0.15,GH_HALF-0.15]; // 갈림길 안은 길마다 양쪽 벽에
+    for(const la of lats){const s=Math.sign(la)||1;if(c>=399)break;const p=trackPt(i,la,3);d.rotation.set(0,ANG[i],0);d.position.copy(p);d.scale.set(0.55,0.25,0.5);d.updateMatrix();hold.setMatrixAt(c,d.matrix);
+     d.position.y+=0.42;d.scale.set(0.22,0.6,0.22);d.updateMatrix();cand.setMatrixAt(c,d.matrix);pos.push(p.x,p.y+0.95,p.z);c++;}}
    hold.count=cand.count=c;WORLD.add(hold,cand);const pg=new THREE.BufferGeometry();pg.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
    G.flames=new THREE.Points(pg,new THREE.PointsMaterial({size:1.7,map:T.flame,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,color:0xffc06a}));WORLD.add(G.flames);}
   // --- 출발 문 / 결승선 (불길한 어두운 붉은색) ---
   const banner=(txt,bg,fg,glow)=>makeTex(1024,128,(c,w,h)=>{c.fillStyle=bg;c.fillRect(0,0,w,h);c.shadowColor=glow;c.shadowBlur=24;c.fillStyle=fg;c.font='bold 78px Jua, sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText(txt,w/2,h/2+4);});
-  const gate=(i,pc,bc,txt,bg,fg,glow)=>{const g=new THREE.Group();place(g,i,0,0);WORLD.add(g);box(1.4,9,1.4,pc,-GH_HALF-0.7,4.5,0,g);box(1.4,9,1.4,pc,GH_HALF+0.7,4.5,0,g);box(W+3,2,0.7,bc,0,8,0,g);
-    const t=banner(txt,bg,fg,glow),bm=new THREE.Mesh(new THREE.PlaneGeometry(W+2,1.8),new THREE.MeshBasicMaterial({map:t}));bm.position.set(0,8,-0.37);bm.rotation.y=Math.PI;g.add(bm);const b2=bm.clone();b2.position.z=0.37;b2.rotation.y=0;g.add(b2);return g;};
+  const gate=(i,pc,bc,txt,bg,fg,glow)=>{const g=new THREE.Group();place(g,i,0,0);WORLD.add(g);box(1.4,9,1.4,pc,-GH_HALF-0.7,4.5,0,g);box(1.4,9,1.4,pc,GH_HALF+0.7,4.5,0,g);box(2*GH_HALF+3,2,0.7,bc,0,8,0,g);
+    const t=banner(txt,bg,fg,glow),bm=new THREE.Mesh(new THREE.PlaneGeometry(2*GH_HALF+2,1.8),new THREE.MeshBasicMaterial({map:t}));bm.position.set(0,8,-0.37);bm.rotation.y=Math.PI;g.add(bm);const b2=bm.clone();b2.position.z=0.37;b2.rotation.y=0;g.add(b2);return g;};
   gate(G.start,0x3b3247,0x4b2f6e,'👻  GHOST HOUSE  👻','#3a2558','#e8dcff','#b48cff');
   const ck=(a,b)=>makeTex(512,64,(c,w,h)=>{for(let x=0;x<32;x++)for(let y=0;y<4;y++){c.fillStyle=(x+y)%2?a:b;c.fillRect(x*16,y*16,16,16);}});
   strip(G.start,3,-GH_HALF,GH_HALF,0.03,new THREE.MeshLambertMaterial({map:ck('#1a1424','#6a5a86'),side:THREE.DoubleSide}),1);
   const fg=gate(G.finish,0x4a0c16,0x5e0f1c,'☠  FINISH  ☠','#3a060e','#ff5a6a','#ff2040');
   strip(G.finish,3,-GH_HALF,GH_HALF,0.03,new THREE.MeshBasicMaterial({map:ck('#160206','#7a0f1e'),side:THREE.DoubleSide}),1);
-  {const pg=new THREE.BufferGeometry(),q=[];for(let k=0;k<14;k++){const p=trackPt(G.finish,-GH_HALF+k*W/13,rnd(1,8.5));q.push(p.x,p.y,p.z);}pg.setAttribute('position',new THREE.Float32BufferAttribute(q,3));
+  {const pg=new THREE.BufferGeometry(),q=[];for(let k=0;k<14;k++){const p=trackPt(G.finish,-GH_HALF+k*2*GH_HALF/13,rnd(1,8.5));q.push(p.x,p.y,p.z);}pg.setAttribute('position',new THREE.Float32BufferAttribute(q,3));
    G.redglow=new THREE.Points(pg,new THREE.PointsMaterial({size:3.2,map:T.redglow,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,color:0xff3348}));WORLD.add(G.redglow);}
   // --- 갈림길 표지판 + 가운데 칸막이 + 유령 ---
   const signT=makeTex(512,128,(c,w,h)=>{c.fillStyle='#2a1f3a';c.fillRect(0,0,w,h);c.strokeStyle='#c9a24a';c.lineWidth=8;c.strokeRect(6,6,w-12,h-12);c.fillStyle='#f4ecff';c.font='54px Jua, sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText('갈림길! 어느 쪽으로?',w/2,h/2+4);});
   G.signTex=signT;const mDiv=new THREE.MeshLambertMaterial({map:T.wall,side:THREE.DoubleSide});
   G.gh=[];G.ghostSides=[2,2];const LW=2*GH_HALF/3; // 갈림길: 길 3개 (폭 LW), ghostSides[k] = 유령이 없는 안전한 길 번호(1~3)
-  G.forks.forEach((F,k)=>{const a=F.a+6,b=F.b-2;
-    for(const d of[-LW/2,LW/2]){strip(a,b-a,d-0.55,d-0.55,7.5,mDiv,(b-a)*GH_STEP/8,0);strip(a,b-a,d+0.55,d+0.55,7.5,mDiv,(b-a)*GH_STEP/8,0);strip(a,b-a,d-0.6,d+0.6,7.5,mat(0x3a3048),1);
-      const g=new THREE.Group();place(g,a,d,0);WORLD.add(g);box(1.3,7.6,1.3,0x3b3247,0,3.8,0,g);} // 칸막이 2개 + 앞 기둥
-    F.cur=[1,2,3].map(s=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(LW-1.2,7.4),new THREE.MeshLambertMaterial({map:T.curtain,side:THREE.DoubleSide,transparent:true,emissive:0x1a0f26}));place(m,a+1,(s-2)*LW,3.7);WORLD.add(m);return {s,m};}); // 입구 커튼: 들어가기 전엔 안이 안 보인다
-    F.da=a;F.db=b;const sg=new THREE.Group();place(sg,F.a+2,0,0);WORLD.add(sg);const bd=new THREE.Mesh(new THREE.BoxGeometry(9,2.2,0.25),new THREE.MeshLambertMaterial({map:signT,emissive:0x221833}));bd.position.y=5.6;sg.add(bd);for(const x of[-LW/2,LW/2])box(0.3,6,0.3,0x3b3247,x,2.8,0,sg);
-    for(const ln of[1,2,3])for(let q=0;q<5;q++){const gm=makeGhostMesh(0.85);WORLD.add(gm);G.gh.push({k,ln,i:Math.round(a+(b-a)*(0.14+q*0.18)),ph:q*1.9+ln*0.8,m:gm,lat:0});}});
+  const mStairF=new THREE.MeshLambertMaterial({map:T.stair,side:THREE.DoubleSide}),mCap=mat(0x3a3048);
+  G.forks.forEach((F,k)=>{const a=F.da,b=F.db,vr=(b-a)*GH_STEP/8;
+    for(const ln of[1,2,3]){ribbon(a,b,i=>laneC(F,ln,i)-laneH(F,i),i=>laneC(F,ln,i)+laneH(F,i),0.02,0.02,mStairF,(b-a)*GH_STEP/6); // 길마다 바닥
+      const L=i=>laneC(F,ln,i)-laneH(F,i)-(ln===1?0.85*(1-Math.max(0,forkU(F,i))):0),Rr=i=>laneC(F,ln,i)+laneH(F,i)+(ln===3?0.85*(1-Math.max(0,forkU(F,i))):0);
+      ribbon(a,b,L,L,7.5,-2.5,mDiv,vr);ribbon(a,b,Rr,Rr,7.5,-2.5,mDiv,vr);}
+    for(const ln of[1,2])ribbon(a,b,i=>laneC(F,ln,i)+laneH(F,i),i=>laneC(F,ln+1,i)-laneH(F,i),7.5,7.5,mCap,1); // 칸막이 윗면
+    ribbon(a,b,i=>laneC(F,1,i)-laneH(F,i)-0.9,i=>laneC(F,3,i)+laneH(F,i)+0.9,-2.5,-2.5,mUnder,1);
+    if(k===1)ribbon(a,b,i=>laneC(F,1,i)-laneH(F,i)-0.9,i=>laneC(F,3,i)+laneH(F,i)+0.9,7.6,7.6,mUnder,1); // 옥상 가는 터널 천장
+    for(const d of[-GH_HALF/3,GH_HALF/3]){const g=new THREE.Group();place(g,a,d,0);WORLD.add(g);box(1.3,7.6,1.3,0x3b3247,0,3.8,0,g);} // 문 사이 기둥
+    F.cur=[1,2,3].map(s=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(2*laneH(F,a+1)+0.4,7.4),new THREE.MeshLambertMaterial({map:T.curtain,side:THREE.DoubleSide,transparent:true,emissive:0x1a0f26}));place(m,a+1,laneC(F,s,a+1),3.7);WORLD.add(m);return {s,m};}); // 입구 커튼: 들어가기 전엔 안이 안 보인다
+    const sg=new THREE.Group();place(sg,F.a+2,0,0);WORLD.add(sg);const bd=new THREE.Mesh(new THREE.BoxGeometry(9,2.2,0.25),new THREE.MeshLambertMaterial({map:signT,emissive:0x221833}));bd.position.y=5.6;sg.add(bd);for(const x of[-GH_HALF/3,GH_HALF/3])box(0.3,6,0.3,0x3b3247,x,2.8,0,sg);
+    for(const ln of[1,2,3])for(let q=0;q<5;q++){const gm=makeGhostMesh(1.05);WORLD.add(gm);G.gh.push({k,ln,i:Math.round(a+(b-a)*(0.24+q*0.13)),ph:q*1.9+ln*0.8,m:gm,lat:0});}});
   // --- 층마다 함정 ---
   const floors=[G.f1[0],G.f2[0]],S0=i=>i;G.axes=[];G.holes=[];G.whands=[];G.fhands=[];G.webs=[];
   const axeMat=mat(0xc9ccd6),woodMat=0x5a3a28;
-  const addAxe=(i,ph)=>{const g=new THREE.Group();place(g,i,0,0);WORLD.add(g);box(W+1,0.6,0.6,0x3a2a22,0,9.3,0,g);const arm=new THREE.Group();arm.position.y=9;g.add(arm);
+  const addAxe=(i,ph)=>{const g=new THREE.Group();place(g,i,0,0);WORLD.add(g);box(2*GH_HALF+1,0.6,0.6,0x3a2a22,0,9.3,0,g);const arm=new THREE.Group();arm.position.y=9;g.add(arm);
     box(0.25,7.2,0.25,woodMat,0,-3.6,0,arm);const head=new THREE.Group();head.position.y=-7.6;arm.add(head);box(4.6,2.3,0.3,0xc9ccd6,0,0,0,head);box(4.8,0.45,0.32,0xe8ecf4,0,-1.15,0,head);box(0.6,0.6,0.6,0x3a2a22,0,0,0,head);
     G.axes.push({i,ph,arm,th:0,dth:0});};
   const pitMat=new THREE.MeshBasicMaterial({color:0x020103,side:THREE.DoubleSide}),pitEdge=new THREE.MeshBasicMaterial({color:0x7a1a24,side:THREE.DoubleSide});
@@ -621,7 +636,7 @@ function buildGhost(){
     const sleeve=box(1,0.8,0.8,0x5b3f8a,0,0.75,0,arm);const hand=new THREE.Group();arm.add(hand);box(0.9,0.85,0.95,0xf6f4ff,0,0.75,0,hand);for(let f=0;f<4;f++)box(0.5,0.18,0.18,0xf6f4ff,0.6,0.42+f*0.22,0,hand);box(0.35,0.2,0.2,0xf6f4ff,0.2,0.75,0.55,hand);
     G.whands.push({i,side,ph,g,sleeve,hand,ext:0});};
   const addWeb=(i,lat)=>{const m=new THREE.Mesh(new THREE.CircleGeometry(2.7,24),new THREE.MeshBasicMaterial({map:T.web,transparent:true,depthWrite:false}));m.rotation.x=-Math.PI/2;const p=trackPt(i,lat,0.05);m.position.copy(p);WORLD.add(m);G.webs.push({i,lat,r:2.6});};
-  const addFHand=(i,lat)=>{const g=new THREE.Group();place(g,i,lat,0);WORLD.add(g);const col=new THREE.Group();col.scale.x=2.05;g.add(col);box(2.2,1,1.6,0xd9f2e4,0,0.5,0,col);for(let f=0;f<4;f++)box(0.42,0.9,0.42,0xd9f2e4,-0.75+f*0.5,1.35,0,col);box(0.42,0.6,0.42,0xd9f2e4,1.25,0.85,0.2,col);
+  const addFHand=(i,lat)=>{const g=new THREE.Group();place(g,i,lat,0);WORLD.add(g);const col=new THREE.Group();col.scale.x=GH_HALF/4.9;g.add(col);box(2.2,1,1.6,0xd9f2e4,0,0.5,0,col);for(let f=0;f<4;f++)box(0.42,0.9,0.42,0xd9f2e4,-0.75+f*0.5,1.35,0,col);box(0.42,0.6,0.42,0xd9f2e4,1.25,0.85,0.2,col);
     const crack=box(5,0.04,2.2,0x0a0610);place(crack,i,lat,0.03);WORLD.add(crack);G.fhands.push({i,lat,col,ext:0});};
   const len=G.f1[1]-G.f1[0],qMatG=new THREE.MeshLambertMaterial({map:qTex,emissive:0x6a4a10});
   for(const f0 of floors){addItemRow((f0+30+0.5)/N,qMatG);addAxe(f0+Math.round(len*0.2),0);addAxe(f0+Math.round(len*0.2)+10,Math.PI);
@@ -630,7 +645,7 @@ function buildGhost(){
     [[0.72,-1],[0.755,1],[0.79,-1]].forEach(([u,sd],q)=>addWHand(f0+Math.round(len*u),sd,q*2.1));}
   {const f0=G.f3[0];addItemRow((f0+30+0.5)/N,qMatG);[[0.2,-4.5],[0.24,4],[0.28,0]].forEach(([u,l])=>addWeb(f0+Math.round(len*u),l));
    addItemRow((f0+Math.round(len*0.4)+0.5)/N,qMatG);for(let q=0;q<3;q++)addHole(f0+Math.round(len*0.55)+q*22,0);
-   [-7.4,-2.47,2.47,7.4].forEach(l=>addFHand(f0+Math.round(len*0.78),l));}
+   [-0.75,-0.25,0.25,0.75].forEach(l=>addFHand(f0+Math.round(len*0.78),l*GH_HALF));}
   // --- 옥상 밤하늘: 보름달·별·탑·떠다니는 유령 ---
   {const moonT=makeTex(256,256,(g,w,h)=>{const gr=g.createRadialGradient(128,128,40,128,128,128);gr.addColorStop(0,'rgba(255,248,215,1)');gr.addColorStop(0.42,'rgba(255,244,200,1)');gr.addColorStop(0.5,'rgba(255,240,190,.35)');gr.addColorStop(1,'rgba(255,240,190,0)');g.fillStyle=gr;g.fillRect(0,0,w,h);
      g.fillStyle='rgba(220,205,160,.55)';[[100,105,14],[150,140,10],[118,160,8],[160,100,7]].forEach(([x,y,r])=>{g.beginPath();g.arc(x,y,r,0,7);g.fill();});});
@@ -802,7 +817,7 @@ let finalAt=0,finalShown=false,skyK=-1; // 마지막 바퀴가 시작된 시각(
 let cereT=0,cerePanel=false,cereOrder=[],cereFw=0,meArrow=null;
 let spectating=false;       // 선생님·늦게 들어온 학생: 위에서 내려다보기
 let startAt=0,raceTime=0,endT=0,camYaw=0,lastCount='';
-const RETIRE_S=10; // 카트라이더처럼: 1등이 들어오고 10초 안에 못 들어오면 리타이어
+const RETIRE_S=20; // 카트라이더처럼: 1등이 들어오고 20초 안에 못 들어오면 리타이어
 function firstFinish(){let f=1e9;for(const r of racers)if(r.finished&&r.finishTime<f)f=r.finishTime;return f<1e9?f:-1;}
 let retireShown='';
 function retireTick(){const el=$('retireCd');let txt='';
@@ -982,7 +997,7 @@ function updateRacer(r,dt){actor=r;
       if(d>20&&d<40){if(a.scSeen!==k){a.scSeen=k;if(Math.random()<0.3){a.sc=k;a.scP=0;a.scJ=0;a.scTry=0;}}}else if(a.scSeen===k&&d>70&&d<N-70)a.scSeen=-1;}
     let tp;throttle=r.finished?0.5:1;
     if(MAP.kind==='ghost'){let near=-1;for(let k=0;k<MAP.forks.length;k++){const F=MAP.forks[k];if(r.idx>F.a-40&&r.idx<F.db)near=k;}
-      if(near>=0){if(a.fk!==near+1){a.fk=near+1;a.fkSide=1+Math.floor(Math.random()*3);}a.lane=(a.fkSide-2)*2*HALF/3;a.laneT=1;}else if(a.fk){a.fk=0;a.laneT=0;}
+      if(near>=0){if(a.fk!==near+1){a.fk=near+1;a.fkSide=1+Math.floor(Math.random()*3);}const F=MAP.forks[near];a.lane=laneC(F,r.fkSide||a.fkSide,Math.min(r.idx+12,F.db));a.laneT=1;}else if(a.fk){a.fk=0;a.laneT=0;}
       if(racing&&!r.finished){for(const h of MAP.whands){const k=h.i-r.idx;if(k>0&&k<14){if(a.lastObs!==h){a.lastObs=h;a.obsOk=Math.random()<a.skill+0.1;}if(a.obsOk&&(h.sv>-0.15||(h.sv<-0.85&&h.dv>0)))throttle=0.1;}}
         for(const H of MAP.holes){const k=H.i-r.idx;if(k>0&&k<14){if(a.lastHole!==H){a.lastHole=H;a.holeOk=Math.random()<a.skill+0.1;}if(a.holeOk&&H.soon)throttle=0.1;}}
         for(const F of MAP.fhands){const k=F.i-r.idx;if(k>0&&k<16&&F.ext>0.1)throttle=0.15;}}}
@@ -1061,7 +1076,7 @@ function animate(r,dt){
     if(r.abT>0)abPose(r,c);
     else if(r.grounded){const sw=Math.sin(r.phase)*0.95*sp;c.legL.rotation.x=sw;c.legR.rotation.x=-sw;c.armL.rotation.x=-sw;c.armR.rotation.x=sw;c.armL.rotation.z=c.armR.rotation.z=0;r.model.position.y=Math.abs(Math.sin(r.phase))*0.13*sp;r.model.rotation.x=0.12*sp;}
     else{c.legL.rotation.x=0.6;c.legR.rotation.x=-0.3;c.armL.rotation.x=c.armR.rotation.x=-2.6;c.armL.rotation.z=-0.3;c.armR.rotation.z=0.3;r.model.position.y=0;r.model.rotation.x=0;}}
-  c.shadow.visible=!r.falling&&r.y>-0.1&&Math.abs(r.lat)<=HALF+0.25;c.inkFx.visible=r.inked>0;c.sootFx.visible=r.soot>0;
+  c.shadow.visible=!r.falling&&r.y>-0.1&&(MAP.kind!=='sky'||Math.abs(r.lat)<=HALF+0.25);c.inkFx.visible=r.inked>0;c.sootFx.visible=r.soot>0;
   c.shadow.position.y=-r.y+0.05;const ss=Math.max(0.4,1-r.y*0.15);c.shadow.scale.set(ss,ss,ss);
   c.shield.visible=r.shield>0;effectFx(r,c);
   if(!r.isPlayer&&!spectating){const cd=Math.hypot(r.pos.x-camera.position.x,r.pos.z-camera.position.z);c.tag.material.opacity=clamp((cd-3.5)/4,0,1);}else c.tag.material.opacity=1;
@@ -1091,14 +1106,18 @@ function onLap(r){
 // ---------- 고스트 하우스: 벽·칸막이·구멍·함정 ----------
 const local=(r,i)=>{const rx=r.pos.x-P[i].x,rz=r.pos.z-P[i].z;return [rx*TG[i].x+rz*TG[i].z,rx*NM[i].x+rz*NM[i].z];}; // [앞뒤, 옆]
 function forkAt(i){const F=MAP.forks;for(let k=0;k<F.length;k++)if(i>=F[k].da&&i<=F[k].db)return k;return -1;}
-function ghostWalls(r,i,lat){const n=NM[i],t=TG[i];let fo=(r.pos.x-P[i].x)*t.x+(r.pos.z-P[i].z)*t.z,moved=false;const lim=HALF-0.55;
+function camClamp(x,z){if(MAP.kind==='sky'||!player)return [x,z]; // 성 안에서는 카메라가 벽 밖으로 나가지 않게
+  const i=nearest(x,z,player.idx),n=NM[i],t=TG[i],dx=x-P[i].x,dz=z-P[i].z,fo=dx*t.x+dz*t.z;let la=dx*n.x+dz*n.z,lo=-GH_HALF+0.3,hi=GH_HALF-0.3;const k=forkAt(i);
+  if(k>=0&&player.fkSide){const F=MAP.forks[k],c=laneC(F,player.fkSide,i),h=laneH(F,i);lo=c-h+0.3;hi=c+h-0.3;}
+  la=clamp(la,lo,hi);return [P[i].x+n.x*la+t.x*fo,P[i].z+n.z*la+t.z*fo];}
+function ghostWalls(r,i,lat){const n=NM[i],t=TG[i];let fo=(r.pos.x-P[i].x)*t.x+(r.pos.z-P[i].z)*t.z,moved=false;const lim=GH_HALF-0.55;
   const bounce=s=>{const kn=r.kx*n.x+r.kz*n.z;if(kn*s>0){r.kx-=n.x*kn*1.6;r.kz-=n.z*kn*1.6;}};
-  if(Math.abs(lat)>lim){const s=Math.sign(lat);lat=s*lim;bounce(s);moved=true;}
-  const k=forkAt(i); // 갈림길: 가운데 칸막이를 넘지 못한다
-  if(k>=0){const LW=2*HALF/3;if(!r.fkSide){r.fkSide=lat<-LW/2?1:lat>LW/2?3:2;if(r.isPlayer)toast(MAP.ghostSides[k]===r.fkSide?'✅ 안전한 길입니다!':'👻 유령이 나오는 길입니다!',1800);}
-    const c=(r.fkSide-2)*LW,lo=c-LW/2+0.95,hi=c+LW/2-0.95; // 칸막이를 넘지 못한다
-    if(r.fkSide>1&&lat<lo){lat=lo;bounce(-1);moved=true;}if(r.fkSide<3&&lat>hi){lat=hi;bounce(1);moved=true;}}
-  else r.fkSide=0;
+  const k=forkAt(i); // 갈림길: 고른 길의 벽을 넘지 못한다
+  if(k>=0){const F=MAP.forks[k];if(!r.fkSide){r.fkSide=lat<-GH_HALF/3?1:lat>GH_HALF/3?3:2;if(r.isPlayer)toast(MAP.ghostSides[k]===r.fkSide?'✅ 안전한 길입니다!':'👻 유령이 나오는 길입니다!',1800);}
+    const c=laneC(F,r.fkSide,i),h=laneH(F,i),lo=c-h+0.4,hi=c+h-0.4;
+    if(lat<lo){lat=lo;bounce(-1);moved=true;}if(lat>hi){lat=hi;bounce(1);moved=true;}}
+  else if(Math.abs(lat)>lim){const s=Math.sign(lat);lat=s*lim;bounce(s);moved=true;}
+  if(k<0)r.fkSide=0;
   if((i>=N-2&&fo>0)||(i<=1&&fo<0)){fo=0;r.speed*=0.5;moved=true;} // 앞뒤 끝 벽
   if(moved){r.pos.x=P[i].x+n.x*lat+t.x*fo;r.pos.z=P[i].z+n.z*lat+t.z*fo;}
   return lat;}
@@ -1108,24 +1127,24 @@ function ghostTraps(r,tag,big){const i=r.idx;
   for(const A of MAP.axes){if(Math.abs(A.i-i)>6)continue;const [fo,la]=local(r,A.i);const L=7.6,bl=L*Math.sin(A.th),bh=9-L*Math.cos(A.th); // 도끼: 앞뒤 0.8 안, 날 높이에 몸이 닿으면
     if(!big&&r.hitCool<=0&&Math.abs(fo)<1.0&&Math.abs(la-bl)<2.5&&bh-1.25<r.y+2.2&&bh+1.25>r.y){r.hitCool=0.7;
       if(hit(r,0.5)){const s=Math.sign(A.dth)||1;r.kx=-TG[i].x*20+NM[i].x*s*6;r.kz=-TG[i].z*20+NM[i].z*s*6;r.vy=6;r.grounded=false;burst(v3(r.pos.x,(1.4)+(r.gy||0),r.pos.z),0xdfe4f0,10);if(tag)toast('챙! 도끼에 튕겼다~');}}}
-  for(const H of MAP.whands){if(H.ext<0.12||Math.abs(H.i-i)>6)continue;const [fo,la]=local(r,H.i);const tip=H.side*(HALF-H.ext*W); // 벽 손: 길 끝까지 쭉 뻗어 옆으로 민다 (키가 커서 점프로 못 넘는다 → 손이 들어갈 때 지나가기)
+  for(const H of MAP.whands){if(H.ext<0.12||Math.abs(H.i-i)>6)continue;const [fo,la]=local(r,H.i);const tip=H.side*(GH_HALF-H.ext*2*GH_HALF); // 벽 손: 길 끝까지 쭉 뻗어 옆으로 민다 (키가 커서 점프로 못 넘는다 → 손이 들어갈 때 지나가기)
     if(!big&&r.wallCool<=0&&Math.abs(fo)<0.9&&r.y<3.6&&(H.side<0?la<tip:la>tip)){r.wallCool=0.5;if(!blocked(r)){r.kx=-NM[i].x*H.side*34;r.kz=-NM[i].z*H.side*34;r.vy=Math.max(r.vy,4);r.grounded=false;r.speed*=0.3;r.hslow=1.8;
       burst(v3(r.pos.x,(1)+(r.gy||0),r.pos.z),0xf6f4ff,8);if(tag)toast('으악! 손에 밀려 느려졌다~');}}}
   for(const F of MAP.fhands){if(F.ext<0.25||Math.abs(F.i-i)>6)continue;const [fo,la]=local(r,F.i); // 바닥 손: 점프해도 못 피하고 뒤로 밀린다
-    if(!big&&r.hitCool<=0&&Math.abs(fo)<1.2&&Math.abs(la-F.lat)<2.6&&r.y<4.2*F.ext){r.hitCool=0.5;if(hit(r,0.3)){r.kx=-TG[i].x*20;r.kz=-TG[i].z*20;r.vy=5;r.grounded=false;burst(v3(r.pos.x,(1.2)+(r.gy||0),r.pos.z),0xd9f2e4,10);if(tag)toast('바닥에서 손이 쑥! 뒤로 밀렸다~');}}}
+    if(!big&&r.hitCool<=0&&Math.abs(fo)<1.2&&Math.abs(la-F.lat)<GH_HALF/4+0.5&&r.y<4.2*F.ext){r.hitCool=0.5;if(hit(r,0.3)){r.kx=-TG[i].x*20;r.kz=-TG[i].z*20;r.vy=5;r.grounded=false;burst(v3(r.pos.x,(1.2)+(r.gy||0),r.pos.z),0xd9f2e4,10);if(tag)toast('바닥에서 손이 쑥! 뒤로 밀렸다~');}}}
   for(const W of MAP.webs){if(Math.abs(W.i-i)>8)continue;const [fo,la]=local(r,W.i);if(!big&&Math.hypot(fo,la-W.lat)<W.r&&r.y<0.3){r.inSlime=true;if(tag&&!r.webT){r.webT=1;toast('끈적끈적 거미줄!',1000);}}else if(tag&&Math.hypot(fo,la-W.lat)>W.r+2)r.webT=0;}
   for(const g of MAP.gh){if(!g.on||Math.abs(g.i-i)>6)continue;const [fo,la]=local(r,g.i); // 갈림길 유령: 튕겨서 늦어진다
-    if(!big&&r.hitCool<=0&&Math.abs(fo)<1.3&&Math.abs(la-g.lat)<1.5&&r.y<2.6){r.hitCool=0.7;if(hit(r,0.7)){r.kx=-TG[i].x*16;r.kz=-TG[i].z*16;r.vy=4;r.grounded=false;burst(v3(r.pos.x,(1.5)+(r.gy||0),r.pos.z),0xffffff,12);if(tag)toast('으스스~ 유령에 부딪혔다!');}}}}
+    if(!big&&r.hitCool<=0&&Math.abs(fo)<1.4&&Math.abs(la-g.lat)<1.8&&r.y<2.8){r.hitCool=0.7;if(hit(r,0.7)){r.kx=-TG[i].x*16;r.kz=-TG[i].z*16;r.vy=4;r.grounded=false;burst(v3(r.pos.x,(1.5)+(r.gy||0),r.pos.z),0xffffff,12);if(tag)toast('으스스~ 유령에 부딪혔다!');}}}}
 // 함정 움직임 (서버 시각 기준 → 모든 화면에서 같은 모습)
 function ghostWorld(wt,dt){const M=MAP;
   for(const A of M.axes){const th=1.05*Math.sin(wt*2*Math.PI/2.2+A.ph);A.dth=th-A.th;A.th=th;A.arm.rotation.z=th;}
   for(const H of M.holes){const P=H.per,cy=Math.floor(wt/P),c=wt-cy*P,o=0.6+hrand(cy+(M.seed||0),H.id)*(P-2.1),open=c>=o&&c<o+1.4,warn=!open&&c<o&&c>o-0.55; // 주기마다 열리는 때가 랜덤
     H.soon=open||(c<o&&o-c<0.8);H.open=open;H.door.visible=!open;H.door.position.y=warn?Math.abs(Math.sin(wt*40))*0.07:0;H.dm.color.setHex(warn?0xff7a6a:0xffffff);}
-  for(const W of M.whands){const sv=Math.sin(wt*2*Math.PI/1.9+W.ph),e=clamp(1.7*sv,0,1);W.ext=e;W.sv=sv;W.dv=Math.cos(wt*2*Math.PI/1.9+W.ph);const L=Math.max(0.01,e*(2*HALF-0.8));W.sleeve.scale.x=L;W.sleeve.position.x=-W.side*L/2;W.hand.position.x=-W.side*L;W.hand.visible=e>0.02;W.hand.rotation.y=W.side>0?Math.PI:0;}
+  for(const W of M.whands){const sv=Math.sin(wt*2*Math.PI/1.9+W.ph),e=clamp(1.7*sv,0,1);W.ext=e;W.sv=sv;W.dv=Math.cos(wt*2*Math.PI/1.9+W.ph);const L=Math.max(0.01,e*(2*GH_HALF-0.8));W.sleeve.scale.x=L;W.sleeve.position.x=-W.side*L/2;W.hand.position.x=-W.side*L;W.hand.visible=e>0.02;W.hand.rotation.y=W.side>0?Math.PI:0;}
   for(const F of M.fhands){const c=((wt%2.8)+2.8)%2.8;const e=c<0.2?c/0.2:c<1.85?1:c<2.05?1-(c-1.85)/0.2:0;F.ext=e;F.col.scale.y=Math.max(0.01,e*2.6);F.col.position.y=-0.2;F.col.visible=e>0.01;}
   const pv=spectating||!player?null:player;
   M.forks.forEach((F,k)=>{const inF=pv&&pv.idx>=F.da&&pv.idx<=F.db+4;for(const c of F.cur){const o=inF&&pv.fkSide===c.s?0.12:0.96;c.m.material.opacity+=(o-c.m.material.opacity)*Math.min(1,dt*6);c.m.material.depthWrite=o>0.5;}});
-  for(const g of M.gh){const F=M.forks[g.k];g.on=g.ln!==M.ghostSides[g.k];g.m.visible=g.on&&(!pv||(pv.idx>=F.da&&pv.fkSide===g.ln)||pv.idx>F.db);g.lat=(g.ln-2)*2*HALF/3+2.1*Math.sin(wt*2*Math.PI/1.8+g.ph);const p=trackPt(g.i,g.lat,0.3+Math.sin(wt*3+g.ph)*0.3);g.m.position.copy(p);g.m.rotation.y=ANG[g.i]+Math.PI+Math.sin(wt*2+g.ph)*0.4;}
+  for(const g of M.gh){const F=M.forks[g.k];g.on=g.ln!==M.ghostSides[g.k];g.m.visible=g.on&&(!pv||(pv.idx>=F.da&&pv.fkSide===g.ln)||pv.idx>F.db);g.lat=laneC(F,g.ln,g.i)+(laneH(F,g.i)-1.6)*Math.sin(wt*2*Math.PI/2.1+g.ph);const p=trackPt(g.i,g.lat,0.3+Math.sin(wt*3+g.ph)*0.3);g.m.position.copy(p);g.m.rotation.y=ANG[g.i]+Math.PI+Math.sin(wt*2+g.ph)*0.4;}
   for(const d of M.deco){d.m.position.y=d.y+Math.sin(wt*0.9+d.ph)*2;d.m.rotation.y=wt*0.3+d.ph;}}
 const hrand=(a,b)=>{let h=Math.imul((a|0)^0x9e3779b9,0x85ebca6b)^Math.imul((b|0)+0x632be5ab,0xc2b2ae35);h^=h>>>16;h=Math.imul(h,0x7feb352d);h^=h>>>15;h=Math.imul(h,0x846ca68b);h^=h>>>16;return (h>>>0)/4294967296;}; // 모든 화면에서 같은 '랜덤'
 function setGhostSides(seed){if(!MAPS.ghost)return;const s=Math.abs(Math.floor(seed/13))|0;MAPS.ghost.seed=s%100000;MAPS.ghost.ghostSides=MAPS.ghost.forks.map((_,k)=>1+Math.floor(hrand(s,k+7)*3));}
@@ -1525,7 +1544,7 @@ function frame(now){
   else{resetCam();
    if(state==='menu'||!player){const a=time*0.15;if(MAP.kind==='ghost'){camera.position.set(CX+Math.sin(a)*170,95,CZ+Math.cos(a)*170);camera.lookAt(CX,8,CZ);}else{camera.position.set(P[0].x+Math.sin(a)*40,17,P[0].z+Math.cos(a)*40);camera.lookAt(P[0].x,1,P[0].z);}}
    else{camYaw+=wrapA(player.h-camYaw)*(1-Math.exp(-4*dt));const fx=Math.sin(camYaw),fz=Math.cos(camYaw);const py=Math.max(player.y,-2.5),pg=player.gy||0;
-    const tx=player.pos.x-fx*7.5,ty=pg+4.3+py*0.5,tz=player.pos.z-fz*7.5;const l=1-Math.exp(-8*dt);
+    const [tx,tz]=camClamp(player.pos.x-fx*7.5,player.pos.z-fz*7.5),ty=pg+4.3+py*0.5;const l=1-Math.exp(-8*dt);
     camera.position.x+=(tx-camera.position.x)*l;camera.position.y+=(ty-camera.position.y)*l;camera.position.z+=(tz-camera.position.z)*l;
     camera.lookAt(player.pos.x+fx*4,pg+1.6+Math.max(player.y,-14)*0.6,player.pos.z+fz*4);
     const fov=BASE_FOV+(player.boost>0?13:0);if(Math.abs(camera.fov-fov)>0.1){camera.fov+=(fov-camera.fov)*(1-Math.exp(-6*dt));camera.updateProjectionMatrix();}}}
