@@ -33,6 +33,7 @@
             "$uid": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 20" }
           },
           "mode": { ".validate": "newData.isString() && newData.val().matches(/^(solo|team)$/)" },
+          "map": { ".validate": "newData.isString() && newData.val().matches(/^(sky|ghost)$/)" },
           "teamCount": { ".validate": "newData.isNumber() && newData.val() >= 2 && newData.val() <= 3" },
           "teamPick": { ".validate": "newData.isString() && newData.val().matches(/^(auto|choose)$/)" },
           "teams": {
