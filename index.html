@@ -467,25 +467,33 @@ addItemRow(0.76);addSlime(0.80,28,-HALF+0.6,-0.5);addBoost(0.86,-5);addBoost(0.8
 // ---------- 지름길 다리 ----------
 // 코스가 크게 도는 두 곳을 직선 다리로 잇는다. 폭 4, 난간 없음, 가운데에 길이 4짜리 끊긴 틈.
 let bridges=[];let BU=0,BV=0;
-function addBridge(ia,ib){
-  const A0=P[ia],B0=P[ib];const L0=Math.hypot(B0.x-A0.x,B0.z-A0.z),dx=(B0.x-A0.x)/L0,dz=(B0.z-A0.z)/L0;
-  const off=u=>{const x=A0.x+dx*u,z=A0.z+dz*u,j=nearestAll(x,z);return Math.hypot(x-P[j].x,z-P[j].z)>HALF-0.9;};
-  let ua=0;while(ua<L0&&!off(ua))ua+=0.25;let ub=L0;while(ub>0&&!off(ub))ub-=0.25;
-  const ax=A0.x+dx*ua,az=A0.z+dz*ua,L=ub-ua,i0=nearestAll(ax,az),i1=nearestAll(ax+dx*L,az+dz*L);
-  const B={ax,az,dx,dz,L,i0,i1,span:wrap(i1-i0),g0:L/2-2,g1:L/2+2,ang:Math.atan2(dx,dz)};
-  const g=new THREE.Group();g.position.set(ax,0,az);g.rotation.y=B.ang;WORLD.add(g);
-  box(4,0.5,B.g0,0xfff1c9,0,-0.23,B.g0/2,g);box(4,0.5,L-B.g1,0xfff1c9,0,-0.23,(B.g1+L)/2,g);
-  const n=Math.floor(L),em=new THREE.InstancedMesh(BOX,new THREE.MeshLambertMaterial({color:0xffffff}),n*2),d=new THREE.Object3D();let c=0;
-  for(let k=0;k<n;k++){const z=(k+0.5)*L/n;if(z>B.g0&&z<B.g1)continue;for(const x of[-1.8,1.8]){d.position.set(x,-0.2,z);d.scale.set(0.4,0.52,L/n);d.updateMatrix();em.setMatrixAt(c,d.matrix);em.setColorAt(c,new THREE.Color(k%2?0xffd400:0x222222));c++;}}
-  em.count=c;g.add(em);
+function addBridge(ia,ib,h){ // 지름길: 끊어진 곳에서 꺾이는 두 조각 (앞 조각과 뒤 조각이 서로 다른 대각선)
+  const A0=P[ia],B0=P[ib],ex=B0.x-A0.x,ez=B0.z-A0.z,E=Math.hypot(ex,ez),nx=ez/E,nz=-ex/E;
+  const dT=(x,z)=>{const j=nearestAll(x,z);return Math.hypot(x-P[j].x,z-P[j].z);},off=(x,z)=>dT(x,z)>HALF-0.9;
+  const mx0=(A0.x+B0.x)/2,mz0=(A0.z+B0.z)/2,Mx=mx0+nx*h,Mz=mz0+nz*h; // h만큼 옆으로 꺾는다
+  const seg=(x0,z0,x1,z1)=>{const L=Math.hypot(x1-x0,z1-z0);return {ax:x0,az:z0,dx:(x1-x0)/L,dz:(z1-z0)/L,L};};
+  const s1=seg(A0.x,A0.z,Mx,Mz),s2=seg(Mx,Mz,B0.x,B0.z);
+  let ua=0;while(ua<s1.L&&!off(s1.ax+s1.dx*ua,s1.az+s1.dz*ua))ua+=0.25;let ub=s2.L;while(ub>0&&!off(s2.ax+s2.dx*ub,s2.az+s2.dz*ub))ub-=0.25;
+  const ax=s1.ax+s1.dx*ua,az=s1.az+s1.dz*ua,Ex=s2.ax+s2.dx*ub,Ez=s2.az+s2.dz*ub,dx=s1.dx,dz=s1.dz;
+  const segs=[seg(ax,az,Mx-dx*2,Mz-dz*2),seg(Mx-dx*2,Mz-dz*2,Mx+dx*2,Mz+dz*2),seg(Mx+dx*2,Mz+dz*2,Ex,Ez)];let u0=0;for(const q of segs){q.u0=u0;q.ang=Math.atan2(q.dx,q.dz);u0+=q.L;} // 앞 조각 · 끊어진 곳(점프) · 꺾인 뒤 조각
+  const L=u0,i0=nearestAll(ax,az),i1=nearestAll(Ex,Ez);
+  const B={segs,ax,az,dx,dz,L,i0,i1,span:wrap(i1-i0),g0:segs[0].L,g1:segs[0].L+segs[1].L,ang:segs[0].ang};
+  const em=new THREE.InstancedMesh(BOX,new THREE.MeshLambertMaterial({color:0xffffff}),Math.ceil(L)*2+8),d=new THREE.Object3D();let c=0;
+  for(const q of[segs[0],segs[2]]){const g=new THREE.Group();g.position.set(q.ax,0,q.az);g.rotation.y=q.ang;g.updateMatrixWorld();WORLD.add(g);box(5,0.5,q.L,0xfff1c9,0,-0.23,q.L/2,g);
+    const n=Math.max(1,Math.floor(q.L));for(let k=0;k<n;k++)for(const x of[-2.3,2.3]){d.position.set(x,-0.2,(k+0.5)*q.L/n);d.rotation.set(0,0,0);d.scale.set(0.4,0.52,q.L/n);d.updateMatrix();d.matrix.premultiply(g.matrixWorld);em.setMatrixAt(c,d.matrix);em.setColorAt(c,new THREE.Color(k%2?0xffd400:0x222222));c++;}}
+  em.count=c;WORLD.add(em);
   // 입구 표지판
   const st=makeTex(256,128,(q,w,h)=>{q.fillStyle='#ffd400';q.fillRect(0,0,w,h);q.strokeStyle='#222';q.lineWidth=12;q.strokeRect(6,6,w-12,h-12);q.fillStyle='#222';q.font='54px Jua, sans-serif';q.textAlign='center';q.textBaseline='middle';q.fillText('⚠ 지름길',w/2,h/2+4);});
   B.signTex=st;const sg=new THREE.Group();sg.position.set(ax+dz*3.6+dx*1.5,0,az-dx*3.6+dz*1.5);sg.rotation.y=ANG[i0]+Math.PI;WORLD.add(sg);
   box(0.3,6,0.3,0xffffff,0,0,0,sg);const bd=new THREE.Mesh(new THREE.BoxGeometry(3.6,1.8,0.2),new THREE.MeshLambertMaterial({map:st}));bd.position.y=3.6;sg.add(bd);
   bridges.push(B);}
-addBridge(152,312); // 지름길은 부스터 뒤 첫 번째 하나만 (두 번째 지름길은 없앰) // 직선 38 / 코스 82 (46~47%), 약 44 짧음
+addBridge(152,312,5.5); // 지름길은 부스터 뒤 첫 번째 하나만 (두 번째 지름길은 없앰) // 직선 38 / 코스 82 (46~47%), 약 44 짧음
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>bridges.forEach(B=>{const q=B.signTex.image.getContext('2d');q.fillStyle='#ffd400';q.fillRect(14,14,228,100);q.fillStyle='#222';q.font='54px Jua, sans-serif';q.fillText('⚠ 지름길',128,68);B.signTex.needsUpdate=true;}));
-function bridgeAt(x,z){for(let k=0;k<bridges.length;k++){const B=bridges[k];const rx=x-B.ax,rz=z-B.az;const u=rx*B.dx+rz*B.dz,v=rx*B.dz-rz*B.dx;if(u>=-0.6&&u<=B.L+0.6&&Math.abs(v)<=3.2){BU=u;BV=v;return k;}}return -1;}
+function bridgeLocal(B,x,z){let best=null;for(const q of B.segs){const rx=x-q.ax,rz=z-q.az,u=rx*q.dx+rz*q.dz,v=rx*q.dz-rz*q.dx;
+    const out=u<-0.6?-0.6-u:u>q.L+0.6?u-q.L-0.6:0,sc=Math.abs(v)+out*3;if(!best||sc<best.sc)best={u:q.u0+u,v,sc,ok:out===0&&Math.abs(v)<=3.2};}return best;}
+function bridgePt(B,u){const q=B.segs.find(q=>u<=q.u0+q.L)||B.segs[B.segs.length-1],t=u-q.u0;return {x:q.ax+q.dx*t,z:q.az+q.dz*t};}
+function bridgeAng(B,u){const q=B.segs.find(q=>u<=q.u0+q.L)||B.segs[B.segs.length-1];return q.ang;}
+function bridgeAt(x,z){for(let k=0;k<bridges.length;k++){const b=bridgeLocal(bridges[k],x,z);if(b.ok){BU=b.u;BV=b.v;return k;}}return -1;}
 
 // ---------- 시상 섬 ----------
 {const g=new THREE.Group();g.position.set(POD.x,0,POD.z);WORLD.add(g);
@@ -998,7 +1006,9 @@ function updateRacer(r,dt){actor=r;
   else if(r.isPlayer&&!r.finished){
     const mag=Math.min(1,Math.hypot(input.x,input.y));
     if(mag>0.12){const desired=camYaw-Math.atan2(input.x,-input.y);const diff=wrapA(desired-r.h);r.h+=clamp(diff*3.2,-2.8,2.8)*dt;throttle=mag*(Math.abs(diff)>2.2?0.35:1);}
-    const tang=r.sc>=0&&bridges[r.sc]?bridges[r.sc].ang:ANG[r.idx];r.wrongWay=racing&&Math.abs(wrapA(r.h-tang))>1.6; // 역주행: 코스 방향과 90° 넘게 반대로 향하면
+    let wd=Math.abs(wrapA(r.h-(r.sc>=0&&bridges[r.sc]?bridgeAng(bridges[r.sc],r.scU||0):ANG[r.idx])));
+    if(r.sc<0)for(const B of bridges){const q=bridgeLocal(B,r.pos.x,r.pos.z);if(q.u>-12&&q.u<1&&Math.abs(q.v)<4)wd=Math.min(wd,Math.abs(wrapA(r.h-B.ang)));} // 지름길 입구로 향하는 건 역주행이 아니다
+    r.wrongWay=racing&&wd>1.6; // 역주행: 코스 방향과 90° 넘게 반대로 향하면
     if(r.wrongWay)throttle=0; // 거꾸로는 달릴 수 없다 (돌아서면 다시 달린다)
   } else {
     const a=r.ai||(r.ai={lane:clamp(r.lat,-6,6),laneT:2,skill:0.8,spd:0.95,itemT:0,lastObs:null,jcool:0});
@@ -1012,9 +1022,9 @@ function updateRacer(r,dt){actor=r;
       if(racing&&!r.finished){for(const h of MAP.whands){const k=h.i-r.idx;if(k>0&&k<14){if(a.lastObs!==h){a.lastObs=h;a.obsOk=Math.random()<a.skill+0.1;}if(a.obsOk&&(h.sv>-0.15||(h.sv<-0.85&&h.dv>0)))throttle=0.1;}}
         for(const H of MAP.holes){const k=H.i-r.idx;if(k>0&&k<14){if(a.lastHole!==H){a.lastHole=H;a.holeOk=Math.random()<a.skill+0.1;}if(a.holeOk&&H.soon)throttle=0.1;}}
         for(const F of MAP.fhands){const k=F.i-r.idx;if(k>0&&k<16&&F.ext>0.1)throttle=0.15;}}}
-    if(a.sc!=null){const B=bridges[a.sc];const u=(r.pos.x-B.ax)*B.dx+(r.pos.z-B.az)*B.dz;
+    if(a.sc!=null){const B=bridges[a.sc];const u=bridgeLocal(B,r.pos.x,r.pos.z).u;
       if(!a.scP){tp={x:B.ax-B.dx*6.5,z:B.az-B.dz*6.5};const d=Math.hypot(tp.x-r.pos.x,tp.z-r.pos.z);if(d<7)throttle=0.55;if(d<2.2||u>-3)a.scP=1;}
-      if(a.scP){const tu=Math.max(u+5,1.5);tp={x:B.ax+B.dx*tu,z:B.az+B.dz*tu};if(u<1&&Math.abs(wrapA(B.ang-r.h))>0.5)throttle=0.5;
+      if(a.scP){const tu=Math.max(u+5,1.5);tp=u<B.g1+0.5?{x:B.ax+B.dx*tu,z:B.az+B.dz*tu}:bridgePt(B,tu); /* 끊어진 곳까지는 앞 조각 방향 그대로, 착지 뒤 꺾인 방향으로 */if(u<1&&Math.abs(wrapA(B.ang-r.h))>0.5)throttle=0.5;
         if(u<B.g0-7)a.scJ=0;if(!a.scJ&&r.sc===a.sc&&u>B.g0-3.6&&u<B.g0-0.6&&r.grounded){a.scJ=1;if(Math.random()<0.93)jump(r);}
         if(u>B.L+2){a.sc=null;a.lane=clamp(r.lat,-7,7);a.laneT=1.5;}}}
     if(a.sc==null){
@@ -1048,8 +1058,8 @@ function updateRacer(r,dt){actor=r;
   if(MAP.kind!=='sky'){r.idx=ni;lat=ghostWalls(r,ni,lat);onRoad=r.y>-0.1&&!(r.y<0.35&&!r.falling&&inHole(r,ni,lat));if(onRoad)r.roadLat=lat;} // 성 안: 벽 때문에 떨어지지 않고, 열린 구멍만 위험
   else if(onRoad){r.idx=ni;r.roadLat=lat;}
   else{const k=bridgeAt(r.pos.x,r.pos.z); // 지름길 다리 위: 다리 위 위치 비율로 본 코스 진행도를 계산
-    if(k>=0){const B=bridges[k],deck=Math.abs(BV)<=2.2&&!(BU>B.g0+0.15&&BU<B.g1-0.15);
-      if(r.lastSc===k||(deck&&r.y>-0.3)){r.sc=k;r.lastSc=k;r.idx=wrap(B.i0+Math.round(clamp(BU/B.L,0,1)*B.span));lat=BV;onRoad=deck;}}}
+    if(k>=0){const B=bridges[k],deck=Math.abs(BV)<=2.7&&!(BU>B.g0+0.15&&BU<B.g1-0.15);
+      if(r.lastSc===k||(deck&&r.y>-0.3)){r.sc=k;r.lastSc=k;r.scU=BU;r.idx=wrap(B.i0+Math.round(clamp(BU/B.L,0,1)*B.span));lat=BV;onRoad=deck;}}}
   // 길 밖(절벽)에서는 진행 위치를 길을 벗어난 그 자리에 고정한다 → 날아간 만큼 앞에서 리스폰되지 않는다
   r.lat=lat;r.gy=PY[r.idx]||0;
   r.vy-=G*dt;r.y+=r.vy*dt;
@@ -1640,7 +1650,7 @@ function updateHUD(){
   const rk=ranking().indexOf(player)+1;$('rank').innerHTML=rk+'<span>위 / '+racers.length+'</span>';
   mctx.clearRect(0,0,260,260);mctx.lineWidth=12;mctx.strokeStyle='rgba(255,255,255,.85)';mctx.lineJoin='round';mctx.beginPath();
   for(let i=0;i<=N;i+=4){const p=P[i%N];i?mctx.lineTo(mx(p.x),mz(p.z)):mctx.moveTo(mx(p.x),mz(p.z));}if(LOOP)mctx.closePath();mctx.stroke();
-  mctx.lineWidth=4;mctx.strokeStyle='rgba(255,212,0,.95)';for(const B of bridges){mctx.beginPath();mctx.moveTo(mx(B.ax),mz(B.az));mctx.lineTo(mx(B.ax+B.dx*B.L),mz(B.az+B.dz*B.L));mctx.stroke();}
+  mctx.lineWidth=4;mctx.strokeStyle='rgba(255,212,0,.95)';for(const B of bridges)for(const q of[B.segs[0],B.segs[2]]){mctx.beginPath();mctx.moveTo(mx(q.ax),mz(q.az));mctx.lineTo(mx(q.ax+q.dx*q.L),mz(q.az+q.dz*q.L));mctx.stroke();}
   mctx.fillStyle='#222';mctx.fillRect(mx(P[0].x)-6,mz(P[0].z)-6,12,12);
   mctx.strokeStyle='rgba(30,20,70,.7)';mctx.lineWidth=2;
   for(const r of racers){if(r.isPlayer)continue;mctx.fillStyle=r.color;mctx.beginPath();mctx.arc(mx(r.pos.x),mz(r.pos.z),6,0,7);mctx.fill();mctx.stroke();}
