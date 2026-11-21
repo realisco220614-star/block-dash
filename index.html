@@ -458,7 +458,7 @@ const goldTex=makeTex(128,128,(g,w,h)=>{const gr=g.createLinearGradient(0,0,w,h)
 const goldMat=new THREE.MeshLambertMaterial({map:goldTex,emissive:0x553300});
 function addItemRow(f,mm){const i=I(f);mm=mm||qMat;[-7.5,-4.5,-1.5,1.5,4.5,7.5].forEach(lat=>{const p=trackPt(i,lat,1.1);const m=new THREE.Mesh(BOX,mm);m.scale.setScalar(1.1);m.position.copy(p);WORLD.add(m);itemBoxes.push({m,p,i,lat,cd:0,ph:Math.random()*6,mat0:mm});});}
 
-addItemRow(0.05);addHurdle(0.09);addBoost(0.125,-4);addBoost(0.125,4.2);                 // 바깥 호 (지름길 1 입구 0.19)
+addHurdle(0.09);addItemRow(0.108);addBoost(0.125,-4); /* 첫 아이템 상자는 첫 장애물(허들) 뒤 → 앞서 출발한 선두만 먼저 먹지 않게 */addBoost(0.125,4.2);                 // 바깥 호 (지름길 1 입구 0.19)
 addSpinner(0.235,1);addItemRow(0.275);addWall(0.31,0);addWall(0.328,2.1);addWall(0.346,4.2); // 왼쪽 끝 U턴 (지름길 1 출구 0.39)
 addJump(0.42,0);addJump(0.42,-6);addJump(0.42,6);addBumpers(0.45);addItemRow(0.515);        // 안쪽 호 (지름길 2 입구 0.53)
 addSlime(0.55,28,0.5,HALF-0.6);addHurdle(0.60);addSpinner(0.65,-1);addBoost(0.69,0);         // 오른쪽 끝 U턴 (지름길 2 출구 0.735)
@@ -653,12 +653,12 @@ function buildGhost(){
   const addFHand=(i,lat)=>{const g=new THREE.Group();place(g,i,lat,0);WORLD.add(g);const col=new THREE.Group();col.scale.x=GH_HALF/4.9;g.add(col);box(2.2,1,1.6,0xd9f2e4,0,0.5,0,col);for(let f=0;f<4;f++)box(0.42,0.9,0.42,0xd9f2e4,-0.75+f*0.5,1.35,0,col);box(0.42,0.6,0.42,0xd9f2e4,1.25,0.85,0.2,col);
     const crack=box(5,0.04,2.2,0x0a0610);place(crack,i,lat,0.03);WORLD.add(crack);G.fhands.push({i,lat,col,ext:0});};
   const len=G.f1[1]-G.f1[0],qMatG=new THREE.MeshLambertMaterial({map:qTex,emissive:0x6a4a10});
-  for(const f0 of floors){addItemRow((f0+30+0.5)/N,qMatG);addAxe(f0+Math.round(len*0.2),0);addAxe(f0+Math.round(len*0.2)+10,Math.PI);
-    addItemRow((f0+Math.round(len*0.38)+0.5)/N,qMatG);
+  for(const f0 of floors){addAxe(f0+Math.round(len*0.2),0);addAxe(f0+Math.round(len*0.2)+10,Math.PI);addItemRow((f0+Math.round(len*0.2)+30+0.5)/N,qMatG); /* 첫 상자는 도끼 뒤 */
+    addItemRow((f0+Math.round(len*0.42)+0.5)/N,qMatG);
     for(let q=0;q<3;q++)addHole(f0+Math.round(len*0.52)+q*22,0);
     [[0.72,-1],[0.755,1],[0.79,-1]].forEach(([u,sd],q)=>addWHand(f0+Math.round(len*u),sd,q*2.1));}
-  {const f0=G.f3[0];addItemRow((f0+30+0.5)/N,qMatG);[[0.2,-4.5],[0.24,4],[0.28,0]].forEach(([u,l])=>addWeb(f0+Math.round(len*u),l));
-   addItemRow((f0+Math.round(len*0.4)+0.5)/N,qMatG);for(let q=0;q<3;q++)addHole(f0+Math.round(len*0.55)+q*22,0);
+  {const f0=G.f3[0];[[0.2,-4.5],[0.24,4],[0.28,0]].forEach(([u,l])=>addWeb(f0+Math.round(len*u),l));addItemRow((f0+Math.round(len*0.33)+0.5)/N,qMatG); /* 첫 상자는 거미줄 뒤 */
+   addItemRow((f0+Math.round(len*0.45)+0.5)/N,qMatG);for(let q=0;q<3;q++)addHole(f0+Math.round(len*0.55)+q*22,0);
    [-0.75,-0.25,0.25,0.75].forEach(l=>addFHand(f0+Math.round(len*0.78),l*GH_HALF));}
   // --- 옥상 밤하늘: 보름달·별·탑·떠다니는 유령 ---
   {const moonT=makeTex(256,256,(g,w,h)=>{const gr=g.createRadialGradient(128,128,40,128,128,128);gr.addColorStop(0,'rgba(255,248,215,1)');gr.addColorStop(0.42,'rgba(255,244,200,1)');gr.addColorStop(0.5,'rgba(255,240,190,.35)');gr.addColorStop(1,'rgba(255,240,190,0)');g.fillStyle=gr;g.fillRect(0,0,w,h);
