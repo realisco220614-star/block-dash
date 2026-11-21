@@ -27,6 +27,8 @@ html,body{margin:0;height:100%;overflow:hidden;background:#8fd8ff;font-family:'J
 #sndBtn{position:fixed;top:12px;right:152px;width:44px;height:44px;border:0;border-radius:12px;background:rgba(30,20,70,.55);color:#fff;font-size:22px;z-index:6;cursor:pointer}
 #rejoinBtn{display:block;margin:6px auto 0;border:0;border-radius:14px;padding:9px 18px;background:#ffd23f;color:#3a2a7a;font:inherit;font-size:19px;box-shadow:0 4px 0 #d9a800;cursor:pointer}
 #rejoinBtn.hidden{display:none}
+#endBtn.play{bottom:auto;top:104px;font-size:15px;padding:6px 12px}
+.hostPlayLbl{cursor:pointer;font-size:18px}.hostPlayLbl input{width:20px;height:20px;vertical-align:-3px;margin-right:4px}
 #endBtn{position:fixed;left:12px;bottom:12px;z-index:6;border:0;border-radius:14px;padding:10px 16px;background:#ff5a5a;color:#fff;font:inherit;font-size:19px;box-shadow:0 4px 0 #c43a3a;cursor:pointer}
 #btnItem{right:132px;bottom:84px;width:86px;height:86px;background:#7c5cff;box-shadow:0 6px 0 #5236c9;font-size:15px}
 #btnItem b{font-size:38px;line-height:1.05;min-height:40px}
@@ -254,6 +256,7 @@ body.portraitOk #rotate{display:none!important}
   <div class="help small" id="hostHint" style="margin-top:0"></div>
   <div class="sub" id="hostCount" style="margin-top:10px">들어온 친구 0 / 20명</div>
   <div class="optrow" id="botRow">🤖 컴퓨터 친구 <button class="botBtn" id="botMinus" aria-label="컴퓨터 친구 빼기">−</button><b id="botNum">0</b>명<button class="botBtn" id="botPlus" aria-label="컴퓨터 친구 더하기">＋</button><button class="link" id="botFill" style="margin:0 0 0 6px">20명까지 채우기</button></div>
+  <div class="optrow"><label class="hostPlayLbl"><input type="checkbox" id="hostPlay"> 🏃 선생님도 같이 달리기</label></div>
   <div class="chips" id="hostList"></div>
   <button id="hostStart" class="big" disabled>▶ 시작</button>
   <div><button class="link" id="hostClose">방 닫기</button></div>
@@ -821,6 +824,7 @@ const RETIRE_S=20; // 카트라이더처럼: 1등이 들어오고 20초 안에 �
 function firstFinish(){let f=1e9;for(const r of racers)if(r.finished&&r.finishTime<f)f=r.finishTime;return f<1e9?f:-1;}
 let retireShown='';
 function retireTick(){const el=$('retireCd');let txt='';
+  const eb=mode==='net'&&room.isHost&&(state==='race'||state==='count')?(player?2:1):0;if(eb!==retireTick.eb){retireTick.eb=eb;$('endBtn').classList.toggle('hidden',!eb);$('endBtn').classList.toggle('play',eb===2);}
   if(state==='race'){const ff=firstFinish();if(ff>=0){const left=ff+RETIRE_S-raceTime;
     if(left>0&&!(player&&player.finished))txt='⏱ 리타이어까지 '+Math.ceil(left);
     if(left<=0&&player&&!player.finished&&!player.retired){player.retired=true;player.item=null;updateItemUI();const bn=$('banner');bn.textContent='😵 RETIRE';bn.classList.remove('hidden');setTimeout(()=>bn.classList.add('hidden'),2500);toast('시간 안에 못 들어왔어요… 리타이어!',2500);}
@@ -1228,7 +1232,7 @@ function netInit(){
     const cred=await auth.signInAnonymously();Net.uid=cred.user.uid;
     Net.db.ref('.info/serverTimeOffset').on('value',s=>{if(!Net.synced)Net.off=s.val()||0;});
     await syncClock(4);
-    Net.db.ref('.info/connected').on('value',s=>{Net.conn=!!s.val();if(Net.conn&&room.code&&!room.isHost)writeMe();});
+    Net.db.ref('.info/connected').on('value',s=>{Net.conn=!!s.val();if(Net.conn&&room.code&&(!room.isHost||room.hostPlay))writeMe();});
   })(),15000).catch(e=>{Net.ready=null;throw e;}));}
 // 서버 시계 맞추기: 여러 번 재서 가장 빨리 다녀온 값을 쓴다 (기기마다 출발·장애물 시각을 똑같이)
 async function syncClock(n){const ref=Net.db.ref('clock/'+Net.uid);let best=Net.synced?Net.rtt:1e9;
@@ -1242,7 +1246,7 @@ function netErrText(e){const m=String(e&&e.message||e);
   return '인터넷 연결을 확인해 주세요';}
 
 function writeMe(){if(!room.ref||!Net.uid)return;room.me=room.ref.child('players/'+Net.uid);room.me.onDisconnect().remove();
-  room.me.update({n:profile.name,c:profile.c,cheer:profile.cheer,ab:profile.ab,j:firebase.database.ServerValue.TIMESTAMP}).catch(()=>{});}
+  room.me.update({n:profile.name||'선생님',c:profile.c,cheer:profile.cheer,ab:profile.ab,j:firebase.database.ServerValue.TIMESTAMP}).catch(()=>{});}
 async function cleanupOldRooms(){ // 3시간 지난 방 정리
   try{const idx=(await Net.db.ref('roomIndex').get()).val()||{};const now=serverNow();
     for(const code in idx){if(now-idx[code]>ROOM_TTL){Net.db.ref('rooms/'+code).remove().catch(()=>{});Net.db.ref('roomIndex/'+code).remove().catch(()=>{});}}}catch(_){}}
@@ -1268,7 +1272,8 @@ async function joinRoom(code){
   enterRoom(code,false);}
 function enterRoom(code,isHost){
   mode='net';Object.assign(room,{code,isHost,ref:Net.db.ref('rooms/'+code),meta:null,players:{},bots:{},raceRound:-1,lobbyRound:-1,cereRound:-1,first:true,sitOut:-1,allDoneAt:0});
-  if(!isHost)writeMe();
+  room.hostPlay=false;if(isHost){try{room.hostPlay=localStorage.getItem('blockdash.hostPlay')==='1';}catch(_){}$('hostPlay').checked=room.hostPlay;}
+  if(!isHost||room.hostPlay)writeMe();
   const pr=room.ref.child('players');
   pr.on('child_added',s=>{room.players[s.key]=s.val();onPlayer(s.key);});
   pr.on('child_changed',s=>{room.players[s.key]=s.val();onPlayer(s.key);});
@@ -1317,8 +1322,8 @@ function onMeta(){
 function startNetRace(){
   const m=room.meta,slots=m.slots||{},tm=m.teams||{};clearRace();setMap(m.map||'sky');setGhostSides(m.startAt||0);room.allDoneAt=0;room.finalSent=false;
   RC={team:m.mode==='team',count:Math.min(3,m.teamCount||3)};
-  const mine=!room.isHost&&room.sitOut!==m.round&&slots[Net.uid]!==undefined;
-  if(mine)addRacer({uid:Net.uid,name:profile.name,c:profile.c,slot:slots[Net.uid],kind:'me',team:tm[Net.uid],cheer:profile.cheer,ab:profile.ab});
+  const mine=(!room.isHost||room.hostPlay)&&room.sitOut!==m.round&&slots[Net.uid]!==undefined;
+  if(mine)addRacer({uid:Net.uid,name:profile.name||'선생님',c:profile.c,slot:slots[Net.uid],kind:'me',team:tm[Net.uid],cheer:profile.cheer,ab:profile.ab});
   for(const uid in slots)if(uid!==Net.uid||!mine)syncRemote(uid);
   spectating=!mine;startAt=m.startAt||serverNow();beginRace();if(mine)resumeProgress();
   if(spectating&&!room.isHost)toast('이번 판은 구경하고, 다음 판부터 달려요!',2600);}
@@ -1425,7 +1430,7 @@ function hostSegs(){const m=room.meta;
   $('hTeamOpts').classList.toggle('hidden',m.mode!=='team');$('hostHint').textContent=m.mode==='team'?'이름을 누르면 다른 팀으로 옮겨요':'';}
 function renderLobby(){
   const m=room.meta||{},ids=sortedIds(),team=m.mode==='team',tc=m.teamCount||3,myT=(room.players[Net.uid]||{}).team;
-  const chip=u=>{const p=room.players[u],c=colorsOf(Array.isArray(p.c)?p.c:[0,0,0,0]);return '<div class="chip'+(u===Net.uid?' me':'')+'" data-u="'+esc(u)+'"><i style="background:'+hx(c.shirt)+';border-top:8px solid '+hx(c.hat)+'"></i>'+esc(cleanName(p.n||'')||'친구')+'</div>';};
+  const chip=u=>{const p=room.players[u],c=colorsOf(Array.isArray(p.c)?p.c:[0,0,0,0]);return '<div class="chip'+(u===Net.uid?' me':'')+'" data-u="'+esc(u)+'"><i style="background:'+hx(c.shirt)+';border-top:8px solid '+hx(c.hat)+'"></i>'+(u===m.host?'👩‍🏫 ':'')+esc(cleanName(p.n||'')||'친구')+'</div>';};
   let html;
   if(team){const g=[];for(let k=0;k<=tc;k++)g.push([]);ids.forEach(u=>{const t=room.players[u].team;g[t>=0&&t<tc?t:tc].push(u);});
     html=g.map((list,k)=>k<tc?'<div class="teamgrp" style="background:'+hx(TEAMS[k].c)+'33"><b>'+TEAMS[k].e+' '+TEAMS[k].n+' '+list.length+'명</b>'+list.map(chip).join('')+'</div>':(list.length?'<div class="teamgrp" style="background:#eee"><b>아직 팀 없음</b>'+list.map(chip).join('')+'</div>':'')).join('');
@@ -1655,7 +1660,7 @@ function showResult(){
 const SCREENS=['menu','joinScr','waitScr','hostScr','result'];
 function showScreen(id){SCREENS.forEach(s=>$(s).classList.toggle('hidden',s!==id));}
 function setPlayUI(on){if(!on)$('startHint').classList.add('hidden');['hudL','rank','mini','joyZone','joyBase','btnItem','btnJump','btnTackle'].forEach(id=>$(id).classList.toggle('hidden',!on));}
-function setSpecUI(on){['specPanel','roomTag'].forEach(id=>$(id).classList.toggle('hidden',!on));$('endBtn').classList.toggle('hidden',!(on&&mode==='net'&&room.isHost));if(on)updateSpec();}
+function setSpecUI(on){['specPanel','roomTag'].forEach(id=>$(id).classList.toggle('hidden',!on));if(on)updateSpec();}
 let busy=false;
 async function guard(msgEl,fn){if(busy)return;busy=true;msgEl.textContent='연결하는 중…';
   try{await fn();msgEl.textContent='';}catch(e){const m=String(e&&e.message||e);
@@ -1674,6 +1679,8 @@ $('waitLeave').onclick=()=>leaveRoom();
 $('hostStart').onclick=hostStart;
 $('botMinus').onclick=()=>setBots((room.meta.bots||0)-1);$('botPlus').onclick=()=>setBots((room.meta.bots||0)+1);$('botFill').onclick=()=>setBots(MAXP);
 $('hostClose').onclick=closeRoom;
+$('hostPlay').onchange=e=>{if(!room.isHost)return;room.hostPlay=e.target.checked;try{localStorage.setItem('blockdash.hostPlay',room.hostPlay?'1':'0');}catch(_){} // 선생님도 학생처럼 참가 (선생님 기기는 계속 방장 역할)
+  if(room.hostPlay)writeMe();else if(room.me){room.me.onDisconnect().cancel();room.me.remove().catch(()=>{});room.me=null;}};
 $('endBtn').onclick=()=>{const m=room.meta;if(!room.isHost||!m||m.state!=='count')return;
   if(!confirm('지금 경기를 끝낼까요?\n아직 못 들어온 친구는 지금 달리던 순서대로 순위가 정해져요.'))return;
   const rk=ranking();room.ref.child('meta').update({state:'result',results:{o:rk.map(r=>r.uid),f:rk.map(r=>r.finished?r2(r.finishTime):-1)}}).catch(e=>toast(netErrText(e)));};
