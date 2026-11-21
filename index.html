@@ -131,6 +131,8 @@ body.portraitOk #rotate{display:none!important}
 #ink{position:fixed;inset:0;z-index:2;pointer-events:none;overflow:hidden}
 #ink i{position:absolute;background:#141a4a;border-radius:46% 54% 60% 40%/50% 42% 58% 50%;animation:inkb 3s forwards}
 @keyframes inkb{0%{transform:scale(.2);opacity:0}7%{transform:scale(1.06);opacity:.97}55%{opacity:.92}100%{transform:scale(1.15);opacity:0}}
+#wrongWay{position:fixed;top:42%;left:50%;transform:translate(-50%,-50%);font-size:44px;color:#fff;background:rgba(200,20,40,.85);padding:8px 22px;border-radius:18px;pointer-events:none;z-index:8;white-space:nowrap;animation:wwBlink .6s infinite alternate}
+@keyframes wwBlink{to{opacity:.55}}
 #retireCd{position:fixed;top:122px;left:50%;transform:translateX(-50%);font-size:34px;color:#fff;-webkit-text-stroke:2px #c4202e;paint-order:stroke fill;pointer-events:none;z-index:7;white-space:nowrap}
 #retireCd.hurry{font-size:46px;animation:rtPulse .5s infinite alternate}
 @keyframes rtPulse{to{transform:translateX(-50%) scale(1.18)}}
@@ -188,6 +190,7 @@ body.portraitOk #rotate{display:none!important}
 <div id="ink"></div>
 <div id="banner" class="hidden"></div>
 <div id="retireCd" class="hidden"></div>
+<div id="wrongWay" class="hidden">⛔ 역주행! 뒤로 돌아요</div>
 <div id="teamBar" class="hidden"></div>
 <div id="count">3</div>
 <div id="joyZone" class="hidden"></div>
@@ -480,7 +483,7 @@ function addBridge(ia,ib){
   B.signTex=st;const sg=new THREE.Group();sg.position.set(ax+dz*3.6+dx*1.5,0,az-dx*3.6+dz*1.5);sg.rotation.y=ANG[i0]+Math.PI;WORLD.add(sg);
   box(0.3,6,0.3,0xffffff,0,0,0,sg);const bd=new THREE.Mesh(new THREE.BoxGeometry(3.6,1.8,0.2),new THREE.MeshLambertMaterial({map:st}));bd.position.y=3.6;sg.add(bd);
   bridges.push(B);}
-addBridge(152,312);addBridge(426,588); // 직선 38 / 코스 82 (46~47%), 약 44 짧음
+addBridge(152,312); // 지름길은 부스터 뒤 첫 번째 하나만 (두 번째 지름길은 없앰) // 직선 38 / 코스 82 (46~47%), 약 44 짧음
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>bridges.forEach(B=>{const q=B.signTex.image.getContext('2d');q.fillStyle='#ffd400';q.fillRect(14,14,228,100);q.fillStyle='#222';q.font='54px Jua, sans-serif';q.fillText('⚠ 지름길',128,68);B.signTex.needsUpdate=true;}));
 function bridgeAt(x,z){for(let k=0;k<bridges.length;k++){const B=bridges[k];const rx=x-B.ax,rz=z-B.az;const u=rx*B.dx+rz*B.dz,v=rx*B.dz-rz*B.dx;if(u>=-0.6&&u<=B.L+0.6&&Math.abs(v)<=3.2){BU=u;BV=v;return k;}}return -1;}
 
@@ -824,6 +827,8 @@ const RETIRE_S=20; // 카트라이더처럼: 1등이 들어오고 20초 안에 �
 function firstFinish(){let f=1e9;for(const r of racers)if(r.finished&&r.finishTime<f)f=r.finishTime;return f<1e9?f:-1;}
 let retireShown='';
 function retireTick(){const el=$('retireCd');let txt='';
+  const ww=!!(player&&player.wrongWay&&state==="race"&&!player.finished&&!player.retired&&!player.falling&&!(player.stun>0)&&!(player.down>0));retireTick.wwT=ww?(retireTick.wwT||0)+1:0;
+  const wws=retireTick.wwT>8;if(wws!==retireTick.wws){retireTick.wws=wws;$('wrongWay').classList.toggle('hidden',!wws);}
   const eb=mode==='net'&&room.isHost&&(state==='race'||state==='count')?(player?2:1):0;if(eb!==retireTick.eb){retireTick.eb=eb;$('endBtn').classList.toggle('hidden',!eb);$('endBtn').classList.toggle('play',eb===2);}
   if(state==='race'){const ff=firstFinish();if(ff>=0){const left=ff+RETIRE_S-raceTime;
     if(left>0&&!(player&&player.finished))txt='⏱ 리타이어까지 '+Math.ceil(left);
@@ -993,6 +998,8 @@ function updateRacer(r,dt){actor=r;
   else if(r.isPlayer&&!r.finished){
     const mag=Math.min(1,Math.hypot(input.x,input.y));
     if(mag>0.12){const desired=camYaw-Math.atan2(input.x,-input.y);const diff=wrapA(desired-r.h);r.h+=clamp(diff*3.2,-2.8,2.8)*dt;throttle=mag*(Math.abs(diff)>2.2?0.35:1);}
+    const tang=r.sc>=0&&bridges[r.sc]?bridges[r.sc].ang:ANG[r.idx];r.wrongWay=racing&&Math.abs(wrapA(r.h-tang))>1.6; // 역주행: 코스 방향과 90° 넘게 반대로 향하면
+    if(r.wrongWay)throttle=0; // 거꾸로는 달릴 수 없다 (돌아서면 다시 달린다)
   } else {
     const a=r.ai||(r.ai={lane:clamp(r.lat,-6,6),laneT:2,skill:0.8,spd:0.95,itemT:0,lastObs:null,jcool:0});
     a.laneT-=dt;a.jcool-=dt;
